@@ -305,6 +305,28 @@ svg {
   text-wrap: pretty;
 }
 
+.hero-guide-link {
+  display: inline-block;
+  margin-top: .7rem;
+  font-size: .875rem;
+}
+
+.skip-link {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: .6rem;
+  inset-inline-start: var(--gutter);
+  padding: .65rem .85rem;
+  border-radius: .6rem;
+  background: var(--lime);
+  color: #243118;
+  font-weight: 750;
+}
+
+.skip-link:not(:focus) {
+  clip-path: inset(50%);
+}
+
 .hero-art {
   position: absolute;
   z-index: -1;
@@ -1100,6 +1122,84 @@ svg {
   color: var(--ink);
 }
 
+.page-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1.65rem, 4.5vw, 3.6rem);
+  margin-top: clamp(2rem, 5vw, 3.75rem);
+  padding: clamp(1.15rem, 4vw, 2.35rem);
+}
+
+.page-guide section {
+  scroll-margin-block-start: 1.25rem;
+}
+
+.page-guide h2 {
+  font-size: clamp(1.35rem, 2.6vw, 1.8rem);
+  line-height: 1.25;
+  letter-spacing: -.036em;
+}
+
+.guide-steps {
+  display: grid;
+  gap: .85rem;
+  margin: 1.15rem 0;
+  padding-inline-start: 1.5rem;
+}
+
+.guide-steps li {
+  padding-inline-start: .25rem;
+}
+
+.guide-steps li::marker,
+.guide-link {
+  color: var(--accent-ink, #47613a);
+  font-weight: 750;
+}
+
+.guide-link {
+  text-underline-offset: .2em;
+}
+
+.guide-steps h3,
+.guide-questions summary {
+  color: var(--ink);
+  font-size: .98rem;
+  font-weight: 750;
+}
+
+.guide-steps p,
+.guide-questions p {
+  margin-top: .2rem;
+  color: var(--muted);
+  font-size: .9rem;
+  line-height: 1.65;
+}
+
+.guide-questions {
+  margin-top: .85rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-questions details {
+  border-top: 1px solid var(--line);
+}
+
+.guide-questions summary {
+  padding-block: .72rem;
+  cursor: pointer;
+}
+
+.guide-questions summary:focus-visible {
+  border-radius: .25rem;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.guide-questions p {
+  margin: 0 0 .8rem;
+}
+
 .site-footer {
   margin-top: 2.35rem;
   border-top: 1px solid #e6e7dd;
@@ -1282,6 +1382,10 @@ svg {
 
   .workspace {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-guide {
+    grid-template-columns: 1fr;
   }
 
   .script-input {

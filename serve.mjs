@@ -4,6 +4,9 @@ import { createServer } from 'node:http';
 const assets = new Map([
   ['/', ['index.html', 'text/html']],
   ['/index.html', ['index.html', 'text/html']],
+  ['/favicon.svg', ['favicon.svg', 'image/svg+xml']],
+  ['/social-preview.png', ['social-preview.png', 'image/png']],
+  ['/sitemap.xml', ['sitemap.xml', 'application/xml']],
   ['/styles.css', ['styles.css', 'text/css']],
   ['/fonts/manrope-latin.woff2', ['fonts/manrope-latin.woff2', 'font/woff2']],
   ['/fonts/noto-sans-bengali.woff2', ['fonts/noto-sans-bengali.woff2', 'font/woff2']],
