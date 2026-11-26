@@ -1,4 +1,5 @@
-import { analyzeText, minimumWords, sampleText } from './analysis-engine.mjs';
+import { analyzeText, minimumWords } from './analysis-engine.mjs';
+import { sampleScripts } from './sample-scripts.mjs';
 
 const byId = (id) => document.getElementById(id);
 const script = byId('script');
@@ -37,6 +38,7 @@ let result;
 let inputTimer;
 let manualAnalysisTimer;
 let undoState;
+let sampleIndex = 0;
 
 function drawGaugeTicks() {
   const ticks = byId('gauge-ticks');
@@ -300,12 +302,12 @@ clearButton.addEventListener('click', () => {
 });
 
 loadSampleButton.addEventListener('click', () => {
-  if (script.value === sampleText) {
-    script.focus();
-    return;
-  }
   const previous = rememberEditor();
-  script.value = sampleText;
+  sampleIndex = (sampleIndex + 1) % sampleScripts.length;
+  if (sampleScripts[sampleIndex] === previous.value) {
+    sampleIndex = (sampleIndex + 1) % sampleScripts.length;
+  }
+  script.value = sampleScripts[sampleIndex];
   script.scrollTop = 0;
   script.setSelectionRange(0, 0);
   refreshAnalysis({ announce: true, compare: false });
@@ -324,6 +326,6 @@ undoButton.addEventListener('click', () => {
 });
 
 drawGaugeTicks();
-script.value = sampleText;
+script.value = sampleScripts[sampleIndex];
 script.setSelectionRange(0, 0);
 refreshAnalysis();
