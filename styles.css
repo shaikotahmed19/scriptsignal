@@ -489,6 +489,131 @@ svg {
   to { transform: rotate(1turn); }
 }
 
+.analysis-flight {
+  --flight-accent: #85ad47;
+  --flight-light: #e0fb9b;
+  --flight-paper: #fcfff3;
+  --flight-ink: #26391e;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+  contain: paint;
+}
+
+:root[data-theme="dark"] .analysis-flight {
+  --flight-accent: #b3da72;
+  --flight-light: #dafb9a;
+  --flight-paper: #2b3928;
+  --flight-ink: #f1f8e8;
+}
+
+.analysis-flight-trails {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.analysis-flight-trail,
+.analysis-flight-glow {
+  fill: none;
+  stroke: var(--flight-accent);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.analysis-flight-trail {
+  stroke-width: 1.75;
+}
+
+.analysis-flight-glow {
+  stroke-width: 7;
+  filter: blur(4px);
+}
+
+.analysis-flight-block {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: flex;
+  align-items: center;
+  gap: .48rem;
+  width: clamp(8.4rem, 16vw, 11.8rem);
+  min-height: 2.65rem;
+  padding: .36rem .55rem .36rem .4rem;
+  border: 1px solid var(--flight-accent);
+  border-radius: .63rem;
+  background: var(--flight-paper);
+  background: linear-gradient(110deg, var(--flight-paper) 40%, color-mix(in srgb, var(--flight-paper), var(--flight-light) 15%));
+  box-shadow: 0 7px 20px #18241933, 0 0 0 2px color-mix(in srgb, var(--flight-accent) 18%, transparent);
+  color: var(--flight-ink);
+  will-change: transform, opacity;
+}
+
+.analysis-flight-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid #b8d67a;
+  border-radius: .35rem;
+  background: var(--flight-light);
+  color: #3d5827;
+}
+
+.analysis-flight-glyph::before,
+.analysis-flight-glyph::after {
+  content: "";
+  position: absolute;
+}
+
+.analysis-flight-glyph::before {
+  width: .62rem;
+  height: .76rem;
+  border: 1px solid currentColor;
+  border-radius: .13rem;
+}
+
+.analysis-flight-glyph::after {
+  width: .32rem;
+  height: .21rem;
+  border-block: 1px solid currentColor;
+}
+
+.analysis-flight-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: .7rem;
+  font-weight: 720;
+  line-height: 1.32;
+}
+
+.analysis-flight-spark {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: .36rem;
+  height: .36rem;
+  border-radius: 50%;
+  background: var(--flight-accent);
+  box-shadow: 0 0 12px 1px var(--flight-accent);
+  will-change: transform, opacity;
+}
+
+.analysis-flight-spark:nth-child(3n) {
+  width: .62rem;
+  height: .19rem;
+  border-radius: .15rem;
+  background: var(--flight-light);
+}
+
 .button:disabled {
   opacity: .48;
 }
@@ -531,6 +656,17 @@ svg {
 .script-input::placeholder {
   color: #6a7264;
   opacity: 1;
+}
+
+.editor-card[data-analysis-source="true"] .script-input {
+  animation: analysis-source-pulse 725ms ease-out both;
+}
+
+@keyframes analysis-source-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 0 transparent; }
+  22% {
+    box-shadow: inset 0 0 0 1px var(--focus-ring), inset 0 0 38px -17px var(--focus-ring);
+  }
 }
 
 .editor-message {
@@ -648,6 +784,11 @@ svg {
   animation: analysis-sweep 650ms ease-out both;
 }
 
+.score-card[data-analysis-flight="true"] .gauge-scan {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--focus-ring) 66%, transparent));
+  animation: analysis-sweep 1300ms 120ms cubic-bezier(.2, .65, .28, 1) both;
+}
+
 .score-card[aria-busy="true"] .gauge-progress {
   opacity: .25;
 }
@@ -672,6 +813,39 @@ svg {
   transform: translateY(-50%);
   text-align: center;
   pointer-events: none;
+  transition: opacity 185ms ease-out;
+}
+
+.score-card[data-analysis-flight="true"] .gauge-readout {
+  opacity: .14;
+}
+
+.gauge[data-analysis-impact="true"]::before,
+.gauge[data-analysis-impact="true"]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 58%;
+  inset-inline-start: 50%;
+  width: 63%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.gauge[data-analysis-impact="true"]::before {
+  background: radial-gradient(circle, color-mix(in srgb, var(--focus-ring) 44%, transparent), transparent 68%);
+  animation: analysis-impact 300ms ease-out both;
+}
+
+.gauge[data-analysis-impact="true"]::after {
+  border: 1px solid var(--focus-ring);
+  box-shadow: 0 0 14px var(--focus-ring), inset 0 0 8px var(--focus-ring);
+  animation: analysis-impact 300ms 24ms cubic-bezier(.15, .7, .3, 1) both;
+}
+
+@keyframes analysis-impact {
+  from { opacity: .9; transform: translate(-50%, -50%) scale(.28); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.12); }
 }
 
 .score-value {
@@ -704,6 +878,20 @@ svg {
   font-size: .75rem;
   font-weight: 750;
   line-height: 1.2;
+}
+
+.score-card[data-analysis-reveal="true"] .score-value {
+  animation: analysis-score-reveal 460ms cubic-bezier(.2, .65, .24, 1) both;
+}
+
+.score-card[data-analysis-reveal="true"] .score-caption {
+  animation: analysis-score-reveal 360ms 55ms ease-out both;
+}
+
+@keyframes analysis-score-reveal {
+  0% { opacity: 0; transform: translateY(.35rem) scale(.88); }
+  55% { opacity: 1; transform: translateY(-.04rem) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .score-change {
@@ -1192,8 +1380,20 @@ svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .analysis-flight,
+  .gauge[data-analysis-impact="true"]::before,
+  .gauge[data-analysis-impact="true"]::after {
+    display: none;
+  }
+
+  .score-card[data-analysis-flight="true"] .gauge-readout {
+    opacity: 1;
+  }
+
   .analysis-spinner,
-  .score-card[aria-busy="true"] .gauge-scan {
+  .editor-card[data-analysis-source="true"] .script-input,
+  .score-card[aria-busy="true"] .gauge-scan,
+  .score-card[data-analysis-reveal="true"] :is(.score-value, .score-caption) {
     animation: none;
   }
 

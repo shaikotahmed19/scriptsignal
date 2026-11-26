@@ -19,7 +19,7 @@ Open [ScriptSignal on localhost](http://127.0.0.1:4173/).
 ## Analyze and edit a script
 
 1. Paste at least 20 words into the **Script editor**, or choose **Load sample** to cycle through English and Bengali examples.
-2. Read the live score or select **Analyze script** to run a scan on demand. The button and gauge show when the scan is in progress.
+2. Read the live score or select **Analyze script** to run a scan on demand. Blocks of script text travel from the editor into the gauge before the result appears.
 3. Review the suggestions. **Apply edit** inserts the previewed replacement and recalculates the score. **Find in script** selects the passage so you can edit it yourself.
 4. Use **Undo** to reverse the latest applied suggestion if you change your mind.
 

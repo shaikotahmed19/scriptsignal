@@ -1,8 +1,10 @@
 import { analyzeText, minimumWords } from './analysis-engine.mjs';
+import { playAnalysisMotion } from './analysis-motion.mjs';
 import { sampleScripts } from './sample-scripts.mjs';
 
 const byId = (id) => document.getElementById(id);
 const script = byId('script');
+const editorCard = script.closest('.editor-card');
 const scoreCard = byId('score-card');
 const gauge = byId('gauge');
 const gaugeProgress = byId('gauge-progress');
@@ -36,7 +38,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let analyzedSource;
 let result;
 let inputTimer;
-let manualAnalysisTimer;
+let manualAnalysis;
 let undoState;
 let sampleIndex = 0;
 
@@ -113,28 +115,51 @@ function showAnalysisProgress(isAnalyzing) {
 }
 
 function stopManualAnalysis() {
-  if (manualAnalysisTimer === undefined) return;
+  if (!manualAnalysis) return;
 
-  clearTimeout(manualAnalysisTimer);
-  manualAnalysisTimer = undefined;
+  const pending = manualAnalysis;
+  manualAnalysis = undefined;
+  pending.cancel?.();
+  delete editorCard.dataset.analysisSource;
+  delete scoreCard.dataset.analysisFlight;
   showAnalysisProgress(false);
 }
 
 function startManualAnalysis(revealResult = false) {
-  if (analyzeButton.disabled || manualAnalysisTimer !== undefined) return;
+  if (analyzeButton.disabled || manualAnalysis) return;
 
   clearTimeout(inputTimer);
   const focusedElement = document.activeElement;
+  const animate = !reducedMotion.matches;
+  const pending = {};
+  manualAnalysis = pending;
+  delete scoreCard.dataset.analysisReveal;
   showAnalysisProgress(true);
-  // Give the browser time to show the progress state before local analysis.
-  const progressDuration = reducedMotion.matches ? 160 : 650;
-  manualAnalysisTimer = setTimeout(() => {
+
+  const complete = () => {
+    if (manualAnalysis !== pending) return;
     refreshAnalysis({ announce: true, recheck: true });
+    if (animate) scoreCard.dataset.analysisReveal = 'true';
     if (revealResult && compactLayout.matches && document.activeElement === focusedElement) {
       scoreCard.focus({ preventScroll: true });
-      scoreCard.scrollIntoView({ block: 'start' });
+      scoreCard.scrollIntoView({ block: 'nearest' });
     }
-  }, progressDuration);
+  };
+
+  if (animate) {
+    editorCard.dataset.analysisSource = 'true';
+    scoreCard.dataset.analysisFlight = 'true';
+    pending.cancel = playAnalysisMotion({
+      editor: script,
+      trigger: analyzeButton,
+      gauge,
+      followDestination: revealResult,
+      onComplete: complete,
+    });
+  } else {
+    const timer = setTimeout(complete, 160);
+    pending.cancel = () => clearTimeout(timer);
+  }
 }
 
 function previewText(text) {
@@ -210,6 +235,7 @@ function showSuggestions() {
 function refreshAnalysis({ announce = false, compare = true, recheck = false } = {}) {
   clearTimeout(inputTimer);
   stopManualAnalysis();
+  delete scoreCard.dataset.analysisReveal;
   if (script.value === analyzedSource) {
     if (recheck) result = analyzeText(analyzedSource);
     if (announce) announceAnalysis();

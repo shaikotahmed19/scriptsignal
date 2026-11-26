@@ -10,6 +10,7 @@ const assets = new Map([
   ['/theme.js', ['theme.js', 'text/javascript']],
   ['/app.mjs', ['app.mjs', 'text/javascript']],
   ['/analysis-engine.mjs', ['analysis-engine.mjs', 'text/javascript']],
+  ['/analysis-motion.mjs', ['analysis-motion.mjs', 'text/javascript']],
   ['/sample-scripts.mjs', ['sample-scripts.mjs', 'text/javascript']],
 ]);
 
