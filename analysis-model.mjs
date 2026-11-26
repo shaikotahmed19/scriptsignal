@@ -1,4 +1,4 @@
-import { styleFeatures } from './analysis-features.mjs';
+import { dominantStyleLanguage, styleFeatures } from './analysis-features.mjs';
 
 // Coefficients fitted with tools/fit-style-model.mjs on the documented training sets.
 const models = {
@@ -78,23 +78,35 @@ const models = {
   },
 };
 
-export function blendWritingStyleScore(text, ruleScore, wordCount) {
-  const weight = .72 * Math.max(0, Math.min(1, (wordCount - 20) / 12));
-  if (!weight) return ruleScore;
+function hasSpeakerTurns(text) {
+  const roleLabels = text.match(/^[ \t]*(?:host|guest|narrator|presenter|interviewer|voiceover|speaker[ \t]+\p{N}+|উপস্থাপক|বক্তা|অতিথি|বর্ণনাকারী|সঞ্চালক)[ \t]*:/gimu);
+  if (roleLabels?.length >= 2) return true;
 
-  // The training sets contain written prose. Explicit dialogue has different rhythms.
-  const speakerTurns = text.match(/^[ \t]*(?:host|guest|narrator|presenter|interviewer|voiceover|speaker[ \t]+\d+|উপস্থাপক|বক্তা|অতিথি|বর্ণনাকারী|সঞ্চালক)[ \t]*:/gimu);
-  if (speakerTurns?.length >= 2) return ruleScore;
+  const nameCounts = new Map();
+  for (const [, name] of text.matchAll(/^[ \t]*([A-Z][a-zA-Z]{1,20}(?:[ \t]+[A-Z][a-zA-Z]{1,20})?)[ \t]*:[ \t]+\p{L}/gmu)) {
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
+  return [...nameCounts.values()].filter((count) => count >= 2).length >= 2;
+}
 
-  const language = /\p{Script=Bengali}/u.test(text) ? 'bn' : 'en';
-  const measured = styleFeatures(text, language);
-  if (!measured) return ruleScore;
-
-  const { bias, features } = models[language];
+function learnedScore(measured, { bias, features }) {
   const logit = features.reduce((total, [name, mean, scale, coefficient]) => {
     const standardized = Math.max(-5, Math.min(5, (measured[name] - mean) / scale));
     return total + standardized * coefficient;
   }, bias);
-  const learnedScore = 100 / (1 + Math.exp(-logit));
-  return Math.round(weight * learnedScore + (1 - weight) * ruleScore);
+  return 100 / (1 + Math.exp(-logit));
+}
+
+export function assessWritingStyle(text, ruleScore, wordCount, format = 'auto') {
+  if (format === 'dialogue' || hasSpeakerTurns(text)) return { score: ruleScore, method: 'dialogue-rules' };
+
+  const weight = .72 * Math.max(0, Math.min(1, (wordCount - 20) / 12));
+  if (!weight) return { score: ruleScore, method: 'short-rules' };
+
+  const language = dominantStyleLanguage(text);
+  const measured = language && styleFeatures(text, language);
+  if (!measured) return { score: ruleScore, method: 'rules' };
+
+  const score = Math.round(weight * learnedScore(measured, models[language]) + (1 - weight) * ruleScore);
+  return { score, method: `${language}-model` };
 }

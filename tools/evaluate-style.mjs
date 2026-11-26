@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [file, cutoff = '50', enginePath = 'analysis-engine.mjs'] = process.argv.slice(2);
+const [file, cutoff = '50', enginePath = 'analysis-engine.mjs', format = 'auto'] = process.argv.slice(2);
 const threshold = Number(cutoff);
-if (!file || !Number.isInteger(threshold) || threshold < 0 || threshold > 100) {
-  throw new Error('Usage: node tools/evaluate-style.mjs <labeled-jsonl> [threshold] [engine-path]');
+if (!file || !Number.isInteger(threshold) || threshold < 0 || threshold > 100 || !['auto', 'dialogue'].includes(format)) {
+  throw new Error('Usage: node tools/evaluate-style.mjs <labeled-jsonl> [threshold] [engine-path] [auto|dialogue]');
 }
 const { analyzeText, planBulkEdits } = await import(pathToFileURL(resolve(enginePath)).href);
 const rows = readFileSync(file, 'utf8').trim().split(/\r?\n/u).map((line) => JSON.parse(line));
@@ -18,7 +18,7 @@ let safeBatches = 0;
 
 for (const { text, label } of rows) {
   if (![0, 1, 'human', 'ai'].includes(label)) throw new Error(`Unsupported label ${label}.`);
-  const result = analyzeText(text);
+  const result = analyzeText(text, { format });
   if (result.score === null) {
     untallied += 1;
     continue;
@@ -29,7 +29,7 @@ for (const { text, label } of rows) {
   const ready = result.suggestions.filter(({ replacement }) => replacement !== null).length;
   if (ready > 0) {
     withReadyEdits += 1;
-    if (planBulkEdits?.(text, result.suggestions).count === ready) safeBatches += 1;
+    if (planBulkEdits?.(text, result.suggestions, { format }).count === ready) safeBatches += 1;
   }
 }
 

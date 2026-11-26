@@ -12,6 +12,8 @@ const scoreNumber = byId('score-number');
 const scorePercent = byId('score-percent');
 const scoreCaption = byId('score-caption');
 const scoreNote = byId('score-note');
+const scoreTitle = byId('score-title');
+const textFormat = byId('text-format');
 const scoreChange = byId('score-change');
 const wordCount = byId('word-count');
 const characterCount = byId('character-count');
@@ -41,12 +43,17 @@ const localeNumber = new Intl.NumberFormat(document.documentElement.lang);
 const scoreExplanation = scoreNote.textContent;
 const compactLayout = matchMedia('(max-width: 47.5rem)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const workerThreshold = 32000;
 let analyzedSource;
+let analyzedFormat;
 let result;
 let inputTimer;
 let manualAnalysis;
+let workerJob;
+let composing = false;
 let undoState;
 let pendingBulkEdit;
+let previewingSamples = false;
 let sampleIndex = 0;
 
 function drawGaugeTicks() {
@@ -76,14 +83,16 @@ function announceAnalysis(change = 0) {
   const changeDescription = change ? ` ${formatCount(Math.abs(change), 'point', 'points')} ${change < 0 ? 'lower' : 'higher'}.` : '';
   analysisStatus.textContent = score === null
     ? scoreNote.textContent
-    : `AI-style score ${score}%.${changeDescription} ${formatCount(suggestions.length, 'suggestion', 'suggestions')}.`;
+    : `${scoreTitle.textContent} ${score}%.${changeDescription} ${formatCount(suggestions.length, 'suggestion', 'suggestions')}.`;
 }
 
 function showScore(previousScore, announce) {
-  const { score } = result;
+  const { score, method, proseWordCount } = result;
   const hasScore = score !== null;
-  const caption = hasScore ? describeScore(score) : 'Awaiting script';
-  const hue = 98 - 0.95 * (score ?? 0);
+  const usesModel = method.endsWith('-model');
+  const caption = hasScore ? (usesModel ? describeScore(score) : 'Writing rules only') : 'Awaiting prose';
+  const hue = usesModel ? 98 - 0.95 * score : 89;
+  scoreTitle.textContent = hasScore && !usesModel ? 'Writing-style score' : 'AI-style score';
   scoreCard.style.setProperty('--score-color', `hsl(${hue} 84% 54%)`);
   scoreCard.style.setProperty('--score-ink', `hsl(${hue} 65% 31%)`);
   gaugeProgress.setAttribute('stroke-dasharray', `${score ?? 0} 100`);
@@ -91,8 +100,20 @@ function showScore(previousScore, announce) {
   scoreNumber.textContent = hasScore ? localeNumber.format(score) : '—';
   scorePercent.hidden = !hasScore;
   scoreCaption.textContent = caption;
-  gauge.setAttribute('aria-label', hasScore ? `${score}% AI-style score. ${caption}.` : 'AI-style score unavailable');
-  scoreNote.textContent = hasScore ? scoreExplanation : `Enter at least ${minimumWords} words for a writing-style estimate.`;
+  gauge.setAttribute('aria-label', hasScore ? `${score}% ${scoreTitle.textContent}. ${caption}.` : 'Writing-style score unavailable');
+  if (method === 'worker-unavailable') {
+    scoreNote.textContent = 'This browser could not analyze the full script in the background. Try a shorter excerpt.';
+  } else if (!hasScore) {
+    scoreNote.textContent = `Enter at least ${minimumWords} words of prose for a writing-style estimate.`;
+  } else if (method === 'dialogue-rules') {
+    scoreNote.textContent = 'Dialogue uses writing rules to suggest edits. Spoken text is difficult to classify by authorship.';
+  } else if (method === 'rules') {
+    scoreNote.textContent = 'This language or language mix uses writing rules for editing guidance.';
+  } else if (proseWordCount < 60) {
+    scoreNote.textContent = 'This excerpt is short. A longer passage gives more evidence about its writing style.';
+  } else {
+    scoreNote.textContent = scoreExplanation;
+  }
 
   const change = hasScore && previousScore !== undefined && previousScore !== null ? score - previousScore : 0;
   scoreChange.hidden = change === 0;
@@ -132,8 +153,48 @@ function stopManualAnalysis() {
   showAnalysisProgress(false);
 }
 
+function stopWorkerJob() {
+  if (!workerJob) return;
+
+  const job = workerJob;
+  workerJob = undefined;
+  job.worker.terminate();
+  job.cleanup();
+}
+
+function startWorkerJob(type, payload, { complete, fail, cleanup }) {
+  stopWorkerJob();
+  let worker;
+  try {
+    worker = new Worker(new URL('./analysis-worker.mjs', import.meta.url), { type: 'module' });
+  } catch {
+    cleanup();
+    fail();
+    return;
+  }
+  const job = { worker, type, cleanup };
+  workerJob = job;
+  worker.onmessage = ({ data }) => {
+    if (workerJob !== job) return;
+    stopWorkerJob();
+    complete(data);
+  };
+  worker.onerror = (error) => {
+    if (workerJob !== job) return;
+    error.preventDefault();
+    stopWorkerJob();
+    fail();
+  };
+  try {
+    worker.postMessage({ type, ...payload });
+  } catch {
+    stopWorkerJob();
+    fail();
+  }
+}
+
 function startManualAnalysis(revealResult = false) {
-  if (analyzeButton.disabled || manualAnalysis) return;
+  if (analyzeButton.disabled || manualAnalysis || composing || workerJob?.type === 'analyze') return;
 
   clearTimeout(inputTimer);
   const focusedElement = document.activeElement;
@@ -145,12 +206,17 @@ function startManualAnalysis(revealResult = false) {
 
   const complete = () => {
     if (manualAnalysis !== pending) return;
-    refreshAnalysis({ announce: true, recheck: true });
-    if (animate) scoreCard.dataset.analysisReveal = 'true';
-    if (revealResult && compactLayout.matches && document.activeElement === focusedElement) {
-      scoreCard.focus({ preventScroll: true });
-      scoreCard.scrollIntoView({ block: 'nearest' });
-    }
+    refreshAnalysis({
+      announce: true,
+      recheck: true,
+      onComplete: () => {
+        if (animate) scoreCard.dataset.analysisReveal = 'true';
+        if (revealResult && compactLayout.matches && document.activeElement === focusedElement) {
+          scoreCard.focus({ preventScroll: true });
+          scoreCard.scrollIntoView({ block: 'nearest' });
+        }
+      },
+    });
   };
 
   if (animate) {
@@ -203,10 +269,14 @@ function renderSuggestion(suggestion) {
       if (!checkCurrentSuggestion()) return;
       const previous = rememberEditor();
       script.setRangeText(replacement, start, end, 'select');
-      refreshAnalysis({ announce: true });
       showMessage('Edit applied.', previous);
-      const nextApply = suggestionsList.querySelector('.apply-button:not([hidden])');
-      (nextApply ?? undoButton).focus({ preventScroll: true });
+      refreshAnalysis({
+        announce: true,
+        onComplete: () => {
+          const nextApply = suggestionsList.querySelector('.apply-button:not([hidden])');
+          (nextApply ?? undoButton).focus({ preventScroll: true });
+        },
+      });
     });
   } else {
     excerpt.textContent = `“${previewText(original)}”`;
@@ -228,6 +298,7 @@ function showSuggestions() {
   suggestionCount.textContent = localeNumber.format(count);
   suggestionCount.setAttribute('aria-label', formatCount(count, 'suggestion', 'suggestions'));
   suggestionsTools.hidden = ready === 0;
+  suggestionsList.hidden = false;
   readyEditCount.textContent = `${formatCount(ready, 'edit', 'edits')} ready`;
   suggestionsList.replaceChildren(...suggestions.map(renderSuggestion));
   suggestionsEmpty.hidden = count > 0;
@@ -242,28 +313,56 @@ function showSuggestions() {
   }
 }
 
-function refreshAnalysis({ announce = false, compare = true, recheck = false } = {}) {
+function refreshAnalysis({ announce = false, compare = true, recheck = false, onComplete } = {}) {
   clearTimeout(inputTimer);
   stopManualAnalysis();
+  stopWorkerJob();
   delete scoreCard.dataset.analysisReveal;
-  if (script.value === analyzedSource) {
-    if (recheck) result = analyzeText(analyzedSource);
+  const source = script.value;
+  const format = textFormat.value;
+  if (!recheck && source === analyzedSource && format === analyzedFormat) {
+    if (suggestionsList.hidden) showSuggestions();
     if (announce) announceAnalysis();
+    onComplete?.();
     return;
   }
-  const previousScore = compare ? result?.score : undefined;
-  analyzedSource = script.value;
-  result = analyzeText(analyzedSource);
+  const previousScore = compare && analyzedFormat === format ? result?.score : undefined;
+  const render = ({ analysis, characterCount: characters }) => {
+    if (source !== script.value || format !== textFormat.value) return;
+    analyzedSource = source;
+    analyzedFormat = format;
+    result = analysis;
+    wordCount.textContent = analysis.wordCount === null ? '— words' : formatCount(analysis.wordCount, 'word', 'words');
+    characterCount.textContent = characters === null ? '— characters' : formatCount(characters, 'character', 'characters');
+    setEditorControls();
+    showScore(previousScore, announce);
+    showSuggestions();
+    onComplete?.();
+  };
 
-  wordCount.textContent = formatCount(result.wordCount, 'word', 'words');
-  characterCount.textContent = formatCount([...analyzedSource].length, 'character', 'characters');
-  setEditorControls();
-  showScore(previousScore, announce);
-  showSuggestions();
+  if (source.length < workerThreshold) {
+    render({ analysis: analyzeText(source, { format }), characterCount: [...source].length });
+    return;
+  }
+
+  showAnalysisProgress(true);
+  scoreCard.dataset.analysisPending = 'true';
+  suggestionsList.hidden = true;
+  suggestionsTools.hidden = true;
+  suggestionsEmpty.hidden = true;
+  startWorkerJob('analyze', { source, format }, {
+    complete: render,
+    fail: () => render({ analysis: { score: null, method: 'worker-unavailable', wordCount: null, suggestions: [] }, characterCount: null }),
+    cleanup: () => {
+      delete scoreCard.dataset.analysisPending;
+      showAnalysisProgress(false);
+    },
+  });
 }
 
 function checkCurrentSuggestion() {
-  if (script.value === analyzedSource) return true;
+  if (composing || workerJob?.type === 'analyze') return false;
+  if (script.value === analyzedSource && textFormat.value === analyzedFormat) return true;
 
   refreshAnalysis({ announce: true });
   showMessage('Script reanalyzed. Choose a suggestion from the updated list.');
@@ -277,24 +376,44 @@ function rememberEditor() {
 acceptAllButton.addEventListener('click', () => {
   if (!checkCurrentSuggestion()) return;
 
-  const plan = planBulkEdits(analyzedSource, result.suggestions);
-  if (!plan.count) {
-    showMessage('These edits could not be applied together. Review them individually.');
+  const source = analyzedSource;
+  const format = analyzedFormat;
+  const openConfirmation = (plan) => {
+    if (script.value !== source || textFormat.value !== format) return;
+    if (!plan.count) {
+      showMessage('These edits could not be applied together. Review them individually.');
+      return;
+    }
+
+    pendingBulkEdit = { source, format, ...plan };
+    bulkWarning.textContent = `This will change ${formatCount(plan.count, 'passage', 'passages')} in your script at once.`;
+    confirmBulk.textContent = `Apply ${formatCount(plan.count, 'edit', 'edits')}`;
+    bulkDialog.returnValue = 'cancel';
+    bulkDialog.showModal();
+  };
+  if (source.length < workerThreshold) {
+    openConfirmation(planBulkEdits(source, result.suggestions, { format }));
     return;
   }
 
-  pendingBulkEdit = { source: analyzedSource, ...plan };
-  bulkWarning.textContent = `This will change ${formatCount(plan.count, 'passage', 'passages')} in your script at once.`;
-  confirmBulk.textContent = `Apply ${formatCount(plan.count, 'edit', 'edits')}`;
-  bulkDialog.returnValue = 'cancel';
-  bulkDialog.showModal();
+  const previousCount = readyEditCount.textContent;
+  acceptAllButton.disabled = true;
+  readyEditCount.textContent = 'Checking edits…';
+  startWorkerJob('bulk', { source, format, suggestions: result.suggestions }, {
+    complete: ({ plan }) => openConfirmation(plan),
+    fail: () => showMessage('The batch check did not finish. Review the edits individually.'),
+    cleanup: () => {
+      acceptAllButton.disabled = false;
+      readyEditCount.textContent = previousCount;
+    },
+  });
 });
 
 bulkDialog.addEventListener('close', () => {
   const pending = pendingBulkEdit;
   pendingBulkEdit = undefined;
   if (bulkDialog.returnValue !== 'accept' || !pending) return;
-  if (script.value !== pending.source) {
+  if (script.value !== pending.source || textFormat.value !== pending.format) {
     refreshAnalysis({ announce: true });
     showMessage('Your script changed. Review the updated suggestions before applying them.');
     return;
@@ -310,6 +429,7 @@ bulkDialog.addEventListener('close', () => {
 });
 
 function showMessage(message = '', previous) {
+  previewingSamples = false;
   undoState = previous;
   editorMessage.hidden = !message;
   messageText.textContent = message;
@@ -345,16 +465,25 @@ function selectPassage(start, end) {
 
 function queueAnalysis(event) {
   stopManualAnalysis();
+  stopWorkerJob();
   showMessage();
   setEditorControls();
   clearTimeout(inputTimer);
-  if (event.isComposing) return;
+  if (composing || event.isComposing) return;
   inputTimer = setTimeout(() => refreshAnalysis({ announce: true }), script.value ? 300 : 0);
 }
 
 script.addEventListener('input', queueAnalysis);
-script.addEventListener('compositionstart', stopManualAnalysis);
-script.addEventListener('compositionend', queueAnalysis);
+script.addEventListener('compositionstart', () => {
+  composing = true;
+  clearTimeout(inputTimer);
+  stopManualAnalysis();
+  stopWorkerJob();
+});
+script.addEventListener('compositionend', (event) => {
+  composing = false;
+  queueAnalysis(event);
+});
 script.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !analyzeButton.disabled && !event.isComposing) {
     event.preventDefault();
@@ -363,6 +492,7 @@ script.addEventListener('keydown', (event) => {
 });
 
 analyzeButton.addEventListener('click', () => startManualAnalysis(true));
+textFormat.addEventListener('change', () => refreshAnalysis({ announce: true, compare: false }));
 
 clearButton.addEventListener('click', () => {
   const previous = rememberEditor();
@@ -373,7 +503,7 @@ clearButton.addEventListener('click', () => {
 });
 
 loadSampleButton.addEventListener('click', () => {
-  const previous = rememberEditor();
+  const previous = previewingSamples ? undoState : rememberEditor();
   sampleIndex = (sampleIndex + 1) % sampleScripts.length;
   if (sampleScripts[sampleIndex] === previous.value) {
     sampleIndex = (sampleIndex + 1) % sampleScripts.length;
@@ -383,6 +513,7 @@ loadSampleButton.addEventListener('click', () => {
   script.setSelectionRange(0, 0);
   refreshAnalysis({ announce: true, compare: false });
   showMessage('Sample loaded.', previous);
+  previewingSamples = true;
 });
 
 undoButton.addEventListener('click', () => {

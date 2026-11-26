@@ -1,4 +1,4 @@
-import { blendWritingStyleScore } from './analysis-model.mjs';
+import { assessWritingStyle } from './analysis-model.mjs';
 
 // These rules describe writing style. A score cannot establish who wrote a script.
 const wordPattern = /[\p{L}\p{N}][\p{L}\p{M}\p{N}\u200C\u200D]*(?:[’'‑-][\p{L}\p{N}][\p{L}\p{M}\p{N}\u200C\u200D]*)*/gu;
@@ -6,15 +6,19 @@ const sentencePattern = /[^.!?।॥！？\r\n]+[.!?।॥！？]*/gu;
 const wordCharacter = "[\\p{L}\\p{M}\\p{N}\\u200C\\u200D]";
 export const minimumWords = 20;
 const maximumSuggestions = 8;
+const nonProsePatterns = [
+  /(?<!`)(?<fenceTicks>`{3,})(?!`)[\s\S]*?(?:(?<!`)\k<fenceTicks>`*|(?![\s\S]))/,
+  /(?<!~)(?<fenceTildes>~{3,})(?!~)[\s\S]*?(?:(?<!~)\k<fenceTildes>~*|(?![\s\S]))/,
+  /(?<!`)(?<inlineTicks>`{1,2})(?!`)[^\r\n]+?(?<!`)\k<inlineTicks>(?!`)/,
+  /https?:\/\/[^\s<>]+|www\.[^\s<>]+/,
+  /(?<![\w.%+-])[\w.%+-]+@[\w.-]+\.[a-z]{2,}/,
+];
+const nonProsePattern = new RegExp(nonProsePatterns.map((pattern) => pattern.source).join("|"), "gimu");
 const protectedPatterns = [
-  /```[\s\S]*?(?:```|(?![\s\S]))/,
-  /~~~[\s\S]*?(?:~~~|(?![\s\S]))/,
-  /`[^`\r\n]+`/,
+  ...nonProsePatterns,
   /^[ \t]*>[ \t][^\r\n]*/,
   /^[ \t]{0,3}#{1,6}[ \t]+[^\r\n]*/,
   /\[[^\]\r\n]*\]/,
-  /https?:\/\/[^\s<>]+|www\.[^\s<>]+/,
-  /(?<![\w.%+-])[\w.%+-]+@[\w.-]+\.[a-z]{2,}/,
   /“[^“”]*(?:”|(?![\s\S]))|«[^«»]*(?:»|(?![\s\S]))/,
   /(?<![\p{L}\p{M}\p{N}])"(?:\\[\s\S]|[^"\\])*(?:"|(?![\s\S]))/,
   /‘[^‘]{1,1000}?’(?![\p{L}\p{M}\p{N}])/,
@@ -93,6 +97,11 @@ const bengaliAdditiveTransition = {
   suffix: transitionPunctuation,
   description: "If this introduces another point, try “এ ছাড়া” before the next full thought.",
 };
+const ratesBeforeBasis = /\b(?:express(?:ed|es|ing)?|convert(?:ed|s|ing)?|prorat(?:e|ed|es|ing)|quot(?:e|ed|es|ing)|normali[sz](?:e|ed|es|ing)|interest|rates?|prices?|costs?|fees?|salary|salaries|wages?|dollars?|currency|rent|payments?)\b[^.!?।॥！？;:\r\n]{0,86}$/iu;
+const recurringBasis = (unit) => ({
+  blockedPrefix: ratesBeforeBasis,
+  description: `For a rate, consider “per ${unit}” to keep its unit clear. Use “every ${unit}” when an action repeats.`,
+});
 const contextualEdits = new Map([
   ["in order to", { prefix: clauseBeginning, suffix: wordAfterPhrase, description: "If the phrase introduces a purpose, try “to” before the action." }],
   ["as a result of", { prefix: clauseBeginning, suffix: wordAfterPhrase, description: "If you’re introducing a cause, try “because of” for a shorter connection." }],
@@ -116,6 +125,10 @@ const contextualEdits = new Map([
   }],
   ["in the event that", { suffix: wordAfterPhrase, description: "Use “if” followed by the complete condition." }],
   ["with the exception of", { suffix: wordAfterPhrase, description: "Name the person or thing the rule excludes." }],
+  ["at the present time", { blockedSuffix: /^\s+of\b/iu, description: "Keep the time tied to the event named after “of”. Consider naming that event directly." }],
+  ["on a daily basis", recurringBasis("day")],
+  ["on a weekly basis", recurringBasis("week")],
+  ["on a monthly basis", recurringBasis("month")],
   ["উপরন্তু", bengaliAdditiveTransition],
   ["অধিকন্তু", bengaliAdditiveTransition],
   ["তদুপরি", bengaliAdditiveTransition],
@@ -155,6 +168,16 @@ function wordsIn(text) {
   return Array.from(text.matchAll(wordPattern));
 }
 
+function proseIn(text, originalWords) {
+  const evidenceText = text.replace(nonProsePattern, (match) => /[\r\n]/.test(match) ? "\n" : " ");
+  const words = evidenceText === text && originalWords ? originalWords : wordsIn(evidenceText);
+  let proseWordCount = 0;
+  for (const [word] of words) {
+    if (/\p{L}/u.test(word)) proseWordCount += 1;
+  }
+  return { evidenceText, proseWordCount };
+}
+
 function sentencesIn(text) {
   const sentences = [];
 
@@ -176,7 +199,7 @@ function sentencesIn(text) {
   return sentences;
 }
 
-function inspectStyle(text, wordCount) {
+function inspectStyle(text, { evidenceText, proseWordCount }, format) {
   const eligibleText = maskProtectedText(text);
   const sentences = sentencesIn(eligibleText);
   let phraseWeight = 0;
@@ -208,14 +231,14 @@ function inspectStyle(text, wordCount) {
     openings.add(opening);
   }
 
-  const scale = Math.min(1, 115 / wordCount);
+  const scale = Math.min(1, 115 / proseWordCount);
   const lengthWeight = longSentences.reduce((total, sentence) => total + Math.min(6, (sentence.words.length - 25) * 0.6), 0);
   const variationWeight = sentenceVariationWeight(sentences);
   const signal = phraseWeight * scale + Math.min(12, lengthWeight * scale) + Math.min(12, repeatedOpenings.length * 4 * scale) + variationWeight;
   const ruleScore = Math.round(18 + 81 * (1 - Math.exp(-signal / 65)));
-  const score = blendWritingStyleScore(text, ruleScore, wordCount);
+  const { score, method } = assessWritingStyle(evidenceText, ruleScore, proseWordCount, format);
 
-  return { score, matches, longSentences, repeatedOpenings };
+  return { score, method, eligibleText, sentences, matches, longSentences, repeatedOpenings };
 }
 
 function sentenceVariationWeight(sentences) {
@@ -257,6 +280,7 @@ function contextualMatches(text, matches) {
     const suffix = text.slice(end, end + 100);
     const canApply = (!context.prefix || context.prefix.test(prefix))
       && (!context.blockedPrefix || !context.blockedPrefix.test(prefix))
+      && (!context.blockedSuffix || !context.blockedSuffix.test(suffix))
       && (!context.suffix || context.suffix.test(suffix));
     if (canApply) return [match];
 
@@ -264,7 +288,7 @@ function contextualMatches(text, matches) {
   });
 }
 
-function phraseSuggestions(text, matches, score, sentenceSplits) {
+function phraseSuggestions(text, { matches, score, method }, sentenceSplits, format) {
   const automatic = [];
   const manual = [];
   const candidates = contextualMatches(text, matches)
@@ -283,10 +307,12 @@ function phraseSuggestions(text, matches, score, sentenceSplits) {
   for (const { rule, start, end } of [...replaceable, ...sentenceSplits].slice(0, verificationLimit)) {
     const replacement = matchCapitalization(text.slice(start, end), rule.replacement);
     const edited = text.slice(0, start) + replacement + text.slice(end);
-    const editedWordCount = wordsIn(edited).length;
-    if (editedWordCount < minimumWords) continue;
+    const editedProse = proseIn(edited);
+    if (editedProse.proseWordCount < minimumWords) continue;
 
-    const impact = score - inspectStyle(edited, editedWordCount).score;
+    const updated = inspectStyle(edited, editedProse, format);
+    if (updated.method !== method) continue;
+    const impact = score - updated.score;
     if (impact > 0) automatic.push(makeSuggestion(text, { ...rule, start, end, replacement, impact }));
   }
 
@@ -315,16 +341,76 @@ function collectSuggestions(candidates) {
   return suggestions;
 }
 
-function describeLongSentence(text, sentence) {
-  const length = `This sentence has ${sentence.words.length} words.`;
+const repeatedFunctionWord = new RegExp(
+  `(?<!${wordCharacter})(a|an|and|but|for|i|in|of|the|to|আমি|আমরা|আপনি|এবং|কিন্তু|তবে)[\\t ]+\\1(?!${wordCharacter})`,
+  "giu",
+);
+const hesitationPattern = /(^|[,;.!?।॥\r\n])([\t ]*)(um+|uh+|erm|you[\t ]+know|উম+)(?=[\t ]*[,;.!?।॥])/gimu;
+
+function copyeditingSuggestions(text, eligibleText) {
+  const suggestions = [];
+
+  for (const match of eligibleText.matchAll(repeatedFunctionWord)) {
+    const [repetition, word] = match;
+    if (word !== "I" && /\p{Lu}/u.test(repetition.slice(word.length))) continue;
+    suggestions.push(makeSuggestion(text, {
+      id: "adjacent-repeat", kind: "Copyediting", title: "Check a repeated word",
+      description: `“${word}” appears twice here. Read it once if the repetition was accidental.`,
+      start: match.index, end: match.index + repetition.length,
+    }));
+    break;
+  }
+
+  let firstHesitation;
+  let hesitations = 0;
+  for (const match of eligibleText.matchAll(hesitationPattern)) {
+    if (/^\p{Lu}{2,}$/u.test(match[3])) continue;
+    firstHesitation ??= match;
+    if (++hesitations < 3) continue;
+    const [, punctuation, gap, filler] = firstHesitation;
+    const start = firstHesitation.index + punctuation.length + gap.length;
+    suggestions.push(makeSuggestion(text, {
+      id: "spoken-hesitation", kind: "Spoken delivery", title: "Try a pause here",
+      description: "This script has several hesitations. Try a short pause here if you want a smoother read aloud.",
+      start, end: start + filler.length,
+    }));
+    break;
+  }
+
+  const spacing = /[\p{L}\p{M}]+ +[,।](?=\s|$)|[\p{L}\p{M}]+।(?=\p{L})/u.exec(eligibleText);
+  if (spacing) {
+    suggestions.push(makeSuggestion(text, {
+      id: "punctuation-spacing", kind: "Copyediting", title: "Check punctuation spacing",
+      description: spacing[0].includes(" ") ? "Move the punctuation next to the preceding word." : "Add a space after this sentence break.",
+      start: spacing.index, end: spacing.index + spacing[0].length,
+    }));
+  }
+
+  return suggestions;
+}
+
+function spokenPause(text, sentence) {
   const visible = maskProtectedText(text.slice(sentence.start, sentence.end));
   const joins = /[,;]\s+(?:but|so|then|yet|তবে|তাই|তারপর|কিন্তু)(?=\s)/giu;
   for (const join of visible.matchAll(joins)) {
     if (join.index < visible.length / 4 || join.index > visible.length * 3 / 4) continue;
-    const cue = wordsIn(visible.slice(join.index + 1)).slice(0, 3).map(([word]) => word).join(" ");
-    return `${length} Consider a break before “${cue}…” if both thoughts can stand on their own.`;
+    const opening = wordsIn(visible.slice(join.index + 1)).slice(0, 3);
+    if (opening.length < 3) continue;
+    const last = opening.at(-1);
+    const start = join.index + 1 + opening[0].index;
+    const end = join.index + 1 + last.index + last[0].length;
+    if (visible.slice(start, end).includes("\0")) continue;
+    return { start: sentence.start + start, end: sentence.start + end, cue: opening.map(([word]) => word).join(" ") };
   }
-  return `${length} Find the first complete thought and try starting a new sentence after it.`;
+  return null;
+}
+
+function describeLongSentence(text, sentence) {
+  const length = `This sentence has ${sentence.words.length} words.`;
+  const pause = spokenPause(text, sentence);
+  return pause
+    ? `${length} Consider a break before “${pause.cue}…” if both thoughts can stand on their own.`
+    : `${length} Find the first complete thought and try starting a new sentence after it.`;
 }
 
 const splitProfiles = {
@@ -374,16 +460,20 @@ function findSentenceSplit(text, sentence) {
   return [];
 }
 
-export function analyzeText(text) {
-  const wordCount = wordsIn(text).length;
-  if (wordCount < minimumWords) {
-    return { score: null, wordCount, confidence: "Need more text", suggestions: [] };
+export function analyzeText(text, { format = "auto" } = {}) {
+  const words = wordsIn(text);
+  const wordCount = words.length;
+  const prose = proseIn(text, words);
+  const { proseWordCount } = prose;
+  if (proseWordCount < minimumWords) {
+    return { score: null, wordCount, proseWordCount, method: "insufficient", confidence: "Need more text", suggestions: [] };
   }
 
-  const confidence = wordCount < 60 ? "Short sample" : wordCount < 180 ? "Moderate sample" : "Longer sample";
-  const { score, matches, longSentences, repeatedOpenings } = inspectStyle(text, wordCount);
+  const confidence = proseWordCount < 60 ? "Short sample" : proseWordCount < 180 ? "Moderate sample" : "Longer sample";
+  const style = inspectStyle(text, prose, format);
+  const { score, method, eligibleText, sentences, longSentences, repeatedOpenings } = style;
   const sentenceSplits = longSentences.slice(0, maximumSuggestions).flatMap((sentence) => findSentenceSplit(text, sentence));
-  const { automatic, manual } = phraseSuggestions(text, matches, score, sentenceSplits);
+  const { automatic, manual } = phraseSuggestions(text, style, sentenceSplits, format);
 
   for (const sentence of longSentences.slice(0, maximumSuggestions)) {
     manual.push(makeSuggestion(text, {
@@ -406,18 +496,33 @@ export function analyzeText(text) {
     }));
   }
 
-  const suggestions = collectSuggestions([...automatic, ...manual]);
-  return { score, wordCount, confidence, suggestions };
+  const delivery = [];
+  if (method === "dialogue-rules") {
+    for (const sentence of sentences) {
+      if (sentence.words.length < 20 || sentence.words.length >= 30) continue;
+      const pause = spokenPause(text, sentence);
+      if (!pause) continue;
+      delivery.push(makeSuggestion(text, {
+        id: "dialogue-pause", kind: "Spoken delivery", title: "Give the listener a pause",
+        description: "Try a short pause just before this phrase so the next thought is easier to follow aloud.",
+        start: pause.start, end: pause.end,
+      }));
+      break;
+    }
+  }
+
+  const suggestions = collectSuggestions([...automatic, ...copyeditingSuggestions(text, eligibleText), ...delivery, ...manual]);
+  return { score, wordCount, proseWordCount, method, confidence, suggestions };
 }
 
-export function planBulkEdits(text, suggestions) {
+export function planBulkEdits(text, suggestions, { format = "auto" } = {}) {
   const unchanged = { text, count: 0 };
   if (!Array.isArray(suggestions) || suggestions.some((suggestion) => !suggestion || typeof suggestion !== "object")) return unchanged;
   const edits = suggestions.filter((suggestion) => suggestion.replacement !== null)
     .sort((left, right) => left.start - right.start);
   if (edits.length === 0) return unchanged;
 
-  const current = analyzeText(text);
+  const current = analyzeText(text, { format });
   const available = new Map(current.suggestions.map((suggestion) => [suggestion.id, suggestion]));
   let end = 0;
   const parts = [];
@@ -432,8 +537,10 @@ export function planBulkEdits(text, suggestions) {
   }
 
   const revised = parts.join("") + text.slice(end);
-  const wordCount = wordsIn(revised).length;
-  if (wordCount < minimumWords || inspectStyle(revised, wordCount).score >= current.score) return unchanged;
+  const prose = proseIn(revised);
+  if (prose.proseWordCount < minimumWords) return unchanged;
+  const updated = inspectStyle(revised, prose, format);
+  if (updated.method !== current.method || updated.score >= current.score) return unchanged;
 
   return { text: revised, count: edits.length };
 }

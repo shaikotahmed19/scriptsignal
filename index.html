@@ -187,6 +187,13 @@
             </div>
           </div>
           <div class="gauge-scale" aria-hidden="true"><span>Low</span><span id="score-change" class="score-change" hidden></span><span>High</span></div>
+          <div class="score-format">
+            <label for="text-format">Text format</label>
+            <select id="text-format" aria-describedby="score-note">
+              <option value="auto">Auto</option>
+              <option value="dialogue">Dialogue / transcript</option>
+            </select>
+          </div>
           <p class="score-note"><svg aria-hidden="true"><use href="#icon-info"/></svg><span id="score-note">The score reflects writing style. Verifying authorship requires other evidence.</span></p>
         </section>
 
@@ -235,7 +242,7 @@
         <div class="guide-questions">
           <details>
             <summary>How is the AI-style score calculated?</summary>
-            <p>ScriptSignal combines phrasing rules with a local model for word choice, sentence rhythm, and repetition. The rules carry more weight on short excerpts. Heavily mixed-language passages and dialogue with speaker labels can use the rules alone.</p>
+            <p>ScriptSignal combines phrasing rules with a local model for word choice, sentence rhythm, and repetition. Select <strong>Dialogue / transcript</strong> for conversations or spoken transcripts. That setting gives a writing-style score to support editing.</p>
           </details>
           <details>
             <summary>Can the score verify who wrote a script?</summary>

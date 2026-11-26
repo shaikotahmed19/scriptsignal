@@ -41,6 +41,26 @@ for (const profile of Object.values(profiles)) {
 
 const sentencePattern = /[^.!?।॥]+[.!?।॥]*/gu;
 
+function representativeText(source) {
+  // Bound model work on long pastes while keeping the opening and the ending.
+  return source.length > 18000 ? `${source.slice(0, 9000)}\n${source.slice(-9000)}` : source;
+}
+
+export function dominantStyleLanguage(source) {
+  const text = representativeText(source);
+  let letters = 0;
+  let latin = 0;
+  let bengali = 0;
+  for (const letter of text.match(/\p{L}/gu) ?? []) {
+    letters += 1;
+    if (/[a-z]/iu.test(letter)) latin += 1;
+    if (/\p{Script=Bengali}/u.test(letter)) bengali += 1;
+  }
+  if (bengali > 0 && bengali / letters >= .75) return 'bn';
+  if (latin > 0 && latin / letters >= .9) return 'en';
+  return null;
+}
+
 function variation(lengths) {
   if (lengths.length < 2) return 0;
   const mean = lengths.reduce((total, length) => total + length, 0) / lengths.length;
@@ -50,14 +70,10 @@ function variation(lengths) {
 
 export function styleFeatures(source, language) {
   const { words: wordsPattern, groups } = profiles[language];
-  const containsBengali = /\p{Script=Bengali}/u.test(source);
-  if ((language === 'bn') !== containsBengali) return null;
-  // Bound the work on long pastes and keep both the opening and the ending.
-  const text = source.length > 18000 ? `${source.slice(0, 9000)}\n${source.slice(-9000)}` : source;
+  const text = representativeText(source);
   const normalized = text.normalize('NFKC').toLowerCase().replace(/’/g, "'");
   const words = normalized.match(wordsPattern) ?? [];
   if (words.length < 20) return null;
-  if (language === 'bn' && (normalized.match(profiles.en.words) ?? []).length > words.length * .4) return null;
 
   const counts = new Map();
   const pairs = new Set();
