@@ -2,6 +2,8 @@
 
 ScriptSignal helps you spot AI-like writing patterns in English and Bengali scripts. A live speedometer shows a percentage estimate and shifts from green toward red as the score rises.
 
+[Try ScriptSignal live](https://shaikotahmed19.github.io/scriptsignal/)
+
 ## Run locally
 
 With Git, Node.js, and npm installed, run these commands.
