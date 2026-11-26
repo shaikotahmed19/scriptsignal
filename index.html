@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Check your script for AI-like writing patterns and revise it with targeted suggestions. Analysis runs in your browser.">
+  <meta name="theme-color" content="#f8f7f2">
+  <title>ScriptSignal — Script analysis and editing</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23d7f879'/%3E%3Cpath d='M8 20h5l3-6 5 12 4-9 2 3h5' fill='none' stroke='%2320271d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <svg class="sr-only" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-wave" viewBox="0 0 24 24"><path d="M2.5 12h4l2.7-5.4 4.1 10.8 3.3-8.2 2 2.8h2.9"/></symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6M16.5 4.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></symbol>
+    <symbol id="icon-sample" viewBox="0 0 24 24"><path d="M8 3h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3Z M14 3v5h5 M9 12h6m-6 4h6"/></symbol>
+    <symbol id="icon-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3m8 0h3a1 1 0 0 1 1 1v3m0 8v3a1 1 0 0 1-1 1h-3m-8 0H5a1 1 0 0 1-1-1v-3M3 12h18"/></symbol>
+    <symbol id="icon-gauge" viewBox="0 0 24 24"><path d="M4.2 18a9 9 0 1 1 15.6 0M12 13l3.7-3.7M6.5 13h.01M12 7.5h.01M17.5 13h.01"/><circle cx="12" cy="13" r="1.3"/></symbol>
+    <symbol id="icon-spark" viewBox="0 0 24 24"><path d="M10 3l1.8 5.2L17 10l-5.2 1.8L10 17l-1.8-5.2L3 10l5.2-1.8L10 3Zm8 11 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2"/></symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#main-content" aria-label="ScriptSignal workspace">
+        <span class="brand-mark"><svg aria-hidden="true"><use href="#icon-wave"/></svg></span>
+        <span class="brand-name">Script<span>Signal</span></span>
+      </a>
+      <span class="header-status"><span class="status-dot"></span> On-device analysis</span>
+    </div>
+  </header>
+
+  <main class="page-shell" id="main-content">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <h1 id="page-title">Does your script<br><span>sound like AI?</span></h1>
+        <p class="hero-description">Spot AI-like writing patterns and make targeted edits to bring out your own voice.</p>
+      </div>
+      <svg class="hero-art" viewBox="0 0 420 180" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="contour" x1="24" y1="150" x2="377" y2="23" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#9aa970" stop-opacity="0"/>
+            <stop offset=".36" stop-color="#98a66b" stop-opacity=".88"/>
+            <stop offset=".69" stop-color="#a1b768"/>
+            <stop offset="1" stop-color="#adbe7c" stop-opacity=".22"/>
+          </linearGradient>
+          <linearGradient id="sweep" x1="32" y1="147" x2="394" y2="28" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#b8c482" stop-opacity="0"/>
+            <stop offset=".55" stop-color="#a6b770" stop-opacity=".17"/>
+            <stop offset="1" stop-color="#d0e79a" stop-opacity=".25"/>
+          </linearGradient>
+        </defs>
+        <path d="M4 151c58 23 85-73 155-59 29 6 56 22 79 5 34-25 29-68 82-75 34-4 55 14 94-2v47c-38 10-58-13-92-8-40 6-50 60-87 74-27 10-50-7-83-7-54 0-83 52-148 25Z" fill="url(#sweep)"/>
+        <g stroke="url(#contour)" stroke-linecap="round">
+          <path d="M5 150c59 14 87-66 149-62 33 2 56 23 82 7 36-23 35-71 84-79 29-5 56 14 93-3"/>
+          <path d="M5 153c60 15 88-59 149-56 32 1 55 22 81 6 36-22 35-69 84-77 29-5 57 14 94-2"/>
+          <path d="M5 156c59 16 88-52 148-50 32 1 55 21 82 5 35-21 35-67 84-75 29-5 57 14 94-1"/>
+          <path d="M5 159c60 17 88-45 148-44 32 0 55 20 82 4 35-21 34-65 84-73 29-5 57 14 94 0"/>
+          <path d="M5 162c60 18 89-39 148-38 32 0 55 19 82 3 34-20 34-63 84-71 29-5 57 14 94 1"/>
+          <path d="M5 165c60 19 89-32 148-32 32 0 54 18 82 2 34-19 34-61 84-69 29-5 57 14 94 2"/>
+          <path d="M5 168c60 20 89-25 148-26 32 0 54 17 82 1 33-18 34-59 84-67 29-5 57 14 94 3"/>
+        </g>
+        <circle cx="319" cy="46" r="5" fill="#c6ea76" stroke="#819b4d"/>
+        <circle cx="154" cy="106" r="3" fill="#eff7dc" stroke="#a0b477"/>
+        <path d="M376 110v15m-7.5-7.5h15M116 52v12m-6-6h12" stroke="#a3b479" stroke-linecap="round"/>
+      </svg>
+    </section>
+
+    <div class="workspace">
+      <section class="card editor-card" aria-labelledby="editor-title">
+        <div class="card-header editor-header">
+          <div class="section-heading">
+            <span class="section-icon"><svg aria-hidden="true"><use href="#icon-edit"/></svg></span>
+            <div><h2 id="editor-title">Script editor</h2><p id="editor-help">Paste or write a script in English or Bengali.</p></div>
+          </div>
+          <button type="button" class="button button-secondary sample-button" id="load-sample">
+            <svg aria-hidden="true"><use href="#icon-sample"/></svg> Load sample
+          </button>
+        </div>
+
+        <div class="editor-body">
+          <label class="sr-only" for="script">Your script</label>
+          <textarea class="script-input" id="script" aria-describedby="editor-help" placeholder="Paste or write your script here…" spellcheck="false" dir="auto"></textarea>
+          <div class="editor-message" id="editor-message" hidden>
+            <span id="editor-message-text" role="status"></span>
+            <button type="button" class="button button-text undo-edit" id="undo-edit" hidden>Undo</button>
+          </div>
+        </div>
+
+        <div class="editor-footer">
+          <div class="editor-meta" aria-label="Script length">
+            <span id="word-count">0 words</span><span class="meta-divider" aria-hidden="true"></span><span id="character-count">0 characters</span>
+          </div>
+          <div class="editor-actions">
+            <button type="button" class="button button-text" id="clear-script" disabled>Clear</button>
+            <button type="button" class="button button-primary" id="analyze-script" disabled>
+              <svg aria-hidden="true"><use href="#icon-scan"/></svg> Analyze script
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="sidebar" aria-label="Script analysis">
+        <section class="card score-card" id="score-card" aria-labelledby="score-title" tabindex="-1">
+          <div class="card-header">
+            <div class="section-heading">
+              <span class="section-icon"><svg aria-hidden="true"><use href="#icon-gauge"/></svg></span>
+              <div><h2 id="score-title">AI likelihood</h2><p>AI-like patterns in your writing</p></div>
+            </div>
+            <span class="live-indicator"><span class="status-dot"></span> Live</span>
+          </div>
+
+          <div class="gauge" id="gauge" role="img" aria-label="AI likelihood unavailable">
+            <svg class="gauge-dial" width="280" height="158" viewBox="0 0 280 158" aria-hidden="true">
+              <path class="gauge-track" d="M50 141a96 96 0 1 1 180 0" pathLength="100"/>
+              <path class="gauge-progress" id="gauge-progress" d="M50 141a96 96 0 1 1 180 0" pathLength="100" stroke-dasharray="0 100"/>
+              <g class="gauge-ticks" id="gauge-ticks"></g>
+            </svg>
+            <div class="gauge-readout" aria-hidden="true">
+              <div class="score-value"><span class="score-number" id="score-number">—</span><span class="score-percent" id="score-percent" hidden>%</span></div>
+              <span class="score-caption" id="score-caption">Awaiting script</span>
+            </div>
+          </div>
+          <div class="gauge-scale" aria-hidden="true"><span>Low</span><span id="score-change" class="score-change" hidden></span><span>High</span></div>
+          <p class="score-note"><svg aria-hidden="true"><use href="#icon-info"/></svg><span id="score-note">This estimate reflects writing style. Authorship cannot be verified from a score.</span></p>
+        </section>
+
+        <section class="card suggestions-card" aria-labelledby="suggestions-title">
+          <div class="card-header">
+            <div class="section-heading">
+              <span class="section-icon"><svg aria-hidden="true"><use href="#icon-spark"/></svg></span>
+              <div><h2 id="suggestions-title">Suggestions</h2><p>Apply a change or edit the passage yourself.</p></div>
+            </div>
+            <span class="suggestion-count" id="suggestion-count" aria-label="0 suggestions">0</span>
+          </div>
+          <div class="suggestions-list" id="suggestions-list"></div>
+          <p class="empty-state" id="suggestions-empty">Suggestions will appear here after analysis.</p>
+        </section>
+      </aside>
+    </div>
+
+    <noscript><p class="empty-state">Enable JavaScript to analyze and edit your script.</p></noscript>
+    <p class="sr-only" role="status" id="analysis-status"></p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span class="footer-brand">ScriptSignal</span>
+      <span class="footer-note"><svg aria-hidden="true"><use href="#icon-lock"/></svg> Your script stays in your browser.</span>
+    </div>
+  </footer>
+
+  <template id="suggestion-template">
+    <article class="suggestion">
+      <div class="suggestion-top"><h3></h3><span class="suggestion-impact" hidden></span></div>
+      <p class="suggestion-description"></p>
+      <div class="suggestion-preview">
+        <del dir="auto"></del>
+        <ins dir="auto"></ins>
+        <p class="suggestion-excerpt" dir="auto" hidden></p>
+      </div>
+      <div class="suggestion-actions">
+        <button class="button button-secondary apply-button" type="button"><svg aria-hidden="true"><use href="#icon-check"/></svg> Apply edit</button>
+        <button class="button button-text locate-button" type="button"><svg aria-hidden="true"><use href="#icon-locate"/></svg> Find in script</button>
+      </div>
+    </article>
+  </template>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "scriptsignal",
+  "private": true,
+  "scripts": {
+    "start": "node serve.mjs"
+  }
+}
