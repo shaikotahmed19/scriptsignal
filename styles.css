@@ -1,3 +1,20 @@
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("fonts/manrope-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/noto-sans-bengali.woff2") format("woff2");
+  unicode-range: U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8, U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9, U+25CC, U+A8F1, U+11DF0-11DF1;
+}
+
 :root {
   color-scheme: light;
   --canvas: #f8f7f2;
@@ -14,10 +31,12 @@
   --shadow: 0 12px 32px #27312108, 0 1px 2px #27312104;
   --page-width: 74rem;
   --gutter: clamp(1rem, 4.25vw, 3rem);
-  --heading-font: "Manrope", "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-family: "Inter", "Aptos", "Segoe UI", system-ui, "Nirmala UI", sans-serif;
+  font-family: "Manrope", "Noto Sans Bengali", "Segoe UI", "Nirmala UI", system-ui, sans-serif;
   font-size: 100%;
+  font-kerning: normal;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   color: var(--ink);
   background: var(--canvas);
 }
@@ -46,15 +65,10 @@
 body {
   min-width: 18rem;
   margin: 0;
-  -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, p {
   margin: 0;
-}
-
-h1, h2, h3 {
-  font-family: var(--heading-font);
 }
 
 button, textarea, select {
@@ -126,10 +140,9 @@ svg {
   align-items: center;
   gap: .68rem;
   color: var(--ink);
-  font-family: var(--heading-font);
   font-size: 1.125rem;
-  font-weight: 800;
-  letter-spacing: -.045em;
+  font-weight: 780;
+  letter-spacing: -.037em;
   text-decoration: none;
 }
 
@@ -269,9 +282,9 @@ svg {
 .hero h1 {
   max-width: 12em;
   font-size: clamp(2.7rem, 4.65vw, 4.35rem);
-  font-weight: 800;
-  line-height: .99;
-  letter-spacing: -.086em;
+  font-weight: 770;
+  line-height: 1.04;
+  letter-spacing: -.055em;
 }
 
 .hero h1 span {
@@ -379,9 +392,9 @@ svg {
 
 .section-heading h2 {
   font-size: 1.14rem;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -.042em;
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -.025em;
 }
 
 .section-heading p {
@@ -502,7 +515,7 @@ svg {
   color: #273126;
   background: #fafaf5;
   font-size: 1rem;
-  line-height: 1.82;
+  line-height: 1.78;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -667,12 +680,11 @@ svg {
   align-items: baseline;
   gap: .05em;
   color: var(--ink);
-  font-family: var(--heading-font);
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-weight: 780;
   font-size: 3.12rem;
-  line-height: .88;
-  letter-spacing: -.09em;
+  line-height: .96;
+  letter-spacing: -.055em;
 }
 
 .score-percent {
@@ -784,9 +796,9 @@ svg {
 .suggestion h3 {
   color: #303a2b;
   font-size: .965rem;
-  font-weight: 800;
+  font-weight: 750;
   line-height: 1.28;
-  letter-spacing: -.023em;
+  letter-spacing: -.018em;
 }
 
 .suggestion-kind {
@@ -1114,7 +1126,7 @@ svg {
   }
 
   .hero h1 {
-    letter-spacing: -.072em;
+    letter-spacing: -.048em;
   }
 
   .hero-description {
@@ -1156,7 +1168,7 @@ svg {
 
   .script-input {
     padding: .95rem .85rem;
-    line-height: 1.62;
+    line-height: 1.68;
   }
 
   .editor-footer {
@@ -1173,7 +1185,7 @@ svg {
   }
 }
 
-@media (max-width: 31rem) {
+@media (max-width: 32rem) {
   .header-controls .header-status {
     display: none;
   }

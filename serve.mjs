@@ -5,6 +5,8 @@ const assets = new Map([
   ['/', ['index.html', 'text/html']],
   ['/index.html', ['index.html', 'text/html']],
   ['/styles.css', ['styles.css', 'text/css']],
+  ['/fonts/manrope-latin.woff2', ['fonts/manrope-latin.woff2', 'font/woff2']],
+  ['/fonts/noto-sans-bengali.woff2', ['fonts/noto-sans-bengali.woff2', 'font/woff2']],
   ['/theme.js', ['theme.js', 'text/javascript']],
   ['/app.mjs', ['app.mjs', 'text/javascript']],
   ['/analysis-engine.mjs', ['analysis-engine.mjs', 'text/javascript']],
@@ -27,7 +29,7 @@ const server = createServer(async (request, response) => {
     const [file, type] = asset;
     const body = await readFile(new URL(file, import.meta.url));
     response.writeHead(200, {
-      'Content-Type': `${type}; charset=utf-8`,
+      'Content-Type': type.startsWith('text/') ? `${type}; charset=utf-8` : type,
       'Content-Length': body.length,
       'Cache-Control': 'no-cache',
     });
