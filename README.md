@@ -19,9 +19,13 @@ Open [ScriptSignal on localhost](http://127.0.0.1:4173/).
 ## Analyze and edit a script
 
 1. Paste at least 20 words into the **Script editor**, or choose **Load sample**.
-2. Read the live score or select **Analyze script** to calculate it immediately.
+2. Read the live score or select **Analyze script** to run a scan on demand. The button and gauge show when the scan is in progress.
 3. Review the suggestions. **Apply edit** inserts the previewed replacement and recalculates the score. **Find in script** selects the passage so you can edit it yourself.
 4. Use **Undo** to reverse the latest applied suggestion if you change your mind.
+
+## Choose a theme
+
+The header menu offers **Default**, **Light**, and **Dark**. Default follows the device’s color scheme as it changes. The browser remembers an explicit Light or Dark choice.
 
 ## How the score works
 

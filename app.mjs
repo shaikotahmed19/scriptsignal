@@ -14,6 +14,10 @@ const wordCount = byId('word-count');
 const characterCount = byId('character-count');
 const clearButton = byId('clear-script');
 const analyzeButton = byId('analyze-script');
+const analyzeIcon = byId('analyze-icon');
+const analyzeLabel = byId('analyze-label');
+const analysisSpinner = byId('analysis-spinner');
+const analysisIndicator = byId('analysis-indicator');
 const loadSampleButton = byId('load-sample');
 const editorMessage = byId('editor-message');
 const messageText = byId('editor-message-text');
@@ -26,9 +30,12 @@ const analysisStatus = byId('analysis-status');
 
 const localeNumber = new Intl.NumberFormat(document.documentElement.lang);
 const scoreExplanation = scoreNote.textContent;
+const compactLayout = matchMedia('(max-width: 47.5rem)');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let analyzedSource;
 let result;
 let inputTimer;
+let manualAnalysisTimer;
 let undoState;
 
 function drawGaugeTicks() {
@@ -91,6 +98,41 @@ function formatCount(count, singular, plural) {
 function setEditorControls() {
   clearButton.disabled = !script.value;
   analyzeButton.disabled = !script.value.trim();
+}
+
+function showAnalysisProgress(isAnalyzing) {
+  analyzeButton.setAttribute('aria-disabled', String(isAnalyzing));
+  scoreCard.setAttribute('aria-busy', String(isAnalyzing));
+  analyzeIcon.toggleAttribute('hidden', isAnalyzing);
+  analysisSpinner.hidden = !isAnalyzing;
+  analyzeLabel.textContent = isAnalyzing ? 'Analyzing…' : 'Analyze script';
+  analysisIndicator.textContent = isAnalyzing ? 'Analyzing' : 'Live';
+  analysisStatus.textContent = isAnalyzing ? 'Analyzing script.' : '';
+}
+
+function stopManualAnalysis() {
+  if (manualAnalysisTimer === undefined) return;
+
+  clearTimeout(manualAnalysisTimer);
+  manualAnalysisTimer = undefined;
+  showAnalysisProgress(false);
+}
+
+function startManualAnalysis(revealResult = false) {
+  if (analyzeButton.disabled || manualAnalysisTimer !== undefined) return;
+
+  clearTimeout(inputTimer);
+  const focusedElement = document.activeElement;
+  showAnalysisProgress(true);
+  // Give the browser time to show the progress state before local analysis.
+  const progressDuration = reducedMotion.matches ? 160 : 650;
+  manualAnalysisTimer = setTimeout(() => {
+    refreshAnalysis({ announce: true, recheck: true });
+    if (revealResult && compactLayout.matches && document.activeElement === focusedElement) {
+      scoreCard.focus({ preventScroll: true });
+      scoreCard.scrollIntoView({ block: 'start' });
+    }
+  }, progressDuration);
 }
 
 function previewText(text) {
@@ -163,9 +205,11 @@ function showSuggestions() {
   }
 }
 
-function refreshAnalysis({ announce = false, compare = true } = {}) {
+function refreshAnalysis({ announce = false, compare = true, recheck = false } = {}) {
   clearTimeout(inputTimer);
+  stopManualAnalysis();
   if (script.value === analyzedSource) {
+    if (recheck) result = analyzeText(analyzedSource);
     if (announce) announceAnalysis();
     return;
   }
@@ -227,6 +271,7 @@ function selectPassage(start, end) {
 }
 
 function queueAnalysis(event) {
+  stopManualAnalysis();
   showMessage();
   setEditorControls();
   clearTimeout(inputTimer);
@@ -235,21 +280,16 @@ function queueAnalysis(event) {
 }
 
 script.addEventListener('input', queueAnalysis);
+script.addEventListener('compositionstart', stopManualAnalysis);
 script.addEventListener('compositionend', queueAnalysis);
 script.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !analyzeButton.disabled && !event.isComposing) {
     event.preventDefault();
-    refreshAnalysis({ announce: true });
+    startManualAnalysis();
   }
 });
 
-analyzeButton.addEventListener('click', () => {
-  refreshAnalysis({ announce: true });
-  if (matchMedia('(max-width: 47.5rem)').matches) {
-    scoreCard.focus({ preventScroll: true });
-    scoreCard.scrollIntoView({ block: 'start' });
-  }
-});
+analyzeButton.addEventListener('click', () => startManualAnalysis(true));
 
 clearButton.addEventListener('click', () => {
   const previous = rememberEditor();
