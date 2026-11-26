@@ -1,3 +1,5 @@
+import { blendWritingStyleScore } from './analysis-model.mjs';
+
 // These rules describe writing style. A score cannot establish who wrote a script.
 const wordPattern = /[\p{L}\p{N}][\p{L}\p{M}\p{N}\u200C\u200D]*(?:[’'‑-][\p{L}\p{N}][\p{L}\p{M}\p{N}\u200C\u200D]*)*/gu;
 const sentencePattern = /[^.!?।॥！？\r\n]+[.!?।॥！？]*/gu;
@@ -6,12 +8,16 @@ export const minimumWords = 20;
 const maximumSuggestions = 8;
 const protectedPatterns = [
   /```[\s\S]*?(?:```|(?![\s\S]))/,
+  /~~~[\s\S]*?(?:~~~|(?![\s\S]))/,
   /`[^`\r\n]+`/,
   /^[ \t]*>[ \t][^\r\n]*/,
+  /^[ \t]{0,3}#{1,6}[ \t]+[^\r\n]*/,
+  /\[[^\]\r\n]*\]/,
   /https?:\/\/[^\s<>]+|www\.[^\s<>]+/,
   /(?<![\w.%+-])[\w.%+-]+@[\w.-]+\.[a-z]{2,}/,
-  /“[^“”]*”|«[^«»]*»|"[^"\r\n]+"/,
-  /‘[^\r\n‘]{1,1000}?’(?![\p{L}\p{M}\p{N}])/,
+  /“[^“”]*(?:”|(?![\s\S]))|«[^«»]*(?:»|(?![\s\S]))/,
+  /(?<![\p{L}\p{M}\p{N}])"(?:\\[\s\S]|[^"\\])*(?:"|(?![\s\S]))/,
+  /‘[^‘]{1,1000}?’(?![\p{L}\p{M}\p{N}])/,
   /(?<![\p{L}\p{M}\p{N}])'[^\r\n]{1,1000}?'(?![\p{L}\p{M}\p{N}])/,
 ];
 const protectedPattern = new RegExp(protectedPatterns.map((pattern) => pattern.source).join("|"), "gimu");
@@ -49,6 +55,16 @@ const rules = [
   ["প্রতিদিনের ভিত্তিতে", "Formal wording", "Say how often directly", "“প্রতিদিন” conveys the same schedule in fewer words.", 10, "প্রতিদিন"],
   ["উপরন্তু", "Formal transition", "Use a spoken transition", "“এ ছাড়া” keeps the link between points in a conversational register.", 8, "এ ছাড়া"],
   ["পরিশেষে", "Formal transition", "Make the ending conversational", "“শেষে” gives the same closing cue in simple spoken Bengali.", 9, "শেষে"],
+  ["at the present time", "Filler phrase", "Shorten the time reference", "“Now” keeps the present-time reference in fewer words.", 8, "now"],
+  ["at a later date", "Filler phrase", "Shorten the time reference", "“Later” keeps the timing open and takes less time to say.", 7, "later"],
+  ["in the event that", "Formal wording", "State the condition simply", "“If” keeps the same condition in everyday language.", 8, "if"],
+  ["with the exception of", "Formal wording", "State the exception directly", "“Except for” keeps the same exception in fewer words.", 7, "except for"],
+  ["on a weekly basis", "Formal wording", "Say how often directly", "“Every week” keeps the same schedule in fewer words.", 8, "every week"],
+  ["on a monthly basis", "Formal wording", "Say how often directly", "“Every month” keeps the same schedule in fewer words.", 8, "every month"],
+  ["বর্তমান সময়ে", "Formal wording", "Shorten the time reference", "“এখন” keeps the present-time reference in fewer words.", 7, "এখন"],
+  ["প্রয়োজনবোধে", "Formal wording", "State the condition simply", "“দরকার হলে” keeps the condition in everyday Bengali.", 7, "দরকার হলে"],
+  ["অধিকন্তু", "Formal transition", "Use a spoken transition", "“এ ছাড়া” keeps the connection between points in everyday Bengali.", 7, "এ ছাড়া"],
+  ["তদুপরি", "Formal transition", "Use a spoken transition", "“এ ছাড়া” keeps the connection between points in everyday Bengali.", 7, "এ ছাড়া"],
 ].map(([phrase, kind, title, description, weight, replacement], index) => ({
   id: `phrase-${index}`,
   phrase,
@@ -63,14 +79,47 @@ const ruleByPhrase = new Map(rules.map((rule) => [normalizePhrase(rule.phrase), 
 const phrases = rules.map((rule) => phrasePattern(rule.phrase)).join("|");
 const phrasingPattern = new RegExp(`(?<!${wordCharacter})(?:${phrases})(?!${wordCharacter})`, "giu");
 const clauseBeginning = /(?:^|[.!?।॥！？,;:\r\n])\s*$/u;
+const wordAfterPhrase = /^[\t \u00A0]+\p{L}/u;
+const positiveAction = /^[\t \u00A0]+(?!(?:not|never)\b)\p{L}/iu;
+const transitionPunctuation = /^[\t \u00A0]*[,—–]/u;
+const causationAfterCopula = /(?:\b(?:am|is|are|was|were|be|been|being)(?:n['’]t)?|['’](?:m|s|re))(?:\s+(?:not|never|just|only|almost|also|still|\p{L}+ly))*\s*$/iu;
+const additiveTransition = {
+  prefix: clauseBeginning,
+  suffix: transitionPunctuation,
+  description: "If this introduces another point, try “also” before the next full thought.",
+};
+const bengaliAdditiveTransition = {
+  prefix: clauseBeginning,
+  suffix: transitionPunctuation,
+  description: "If this introduces another point, try “এ ছাড়া” before the next full thought.",
+};
 const contextualEdits = new Map([
-  ["in order to", { prefix: clauseBeginning, description: "If the phrase introduces a purpose, try “to” before the action." }],
-  ["as a result of", { prefix: clauseBeginning, description: "If you’re introducing a cause, try “because of” for a shorter connection." }],
-  ["in conclusion", { prefix: clauseBeginning, description: "If this is the beginning of your wrap-up, try “to sum up.”" }],
+  ["in order to", { prefix: clauseBeginning, suffix: wordAfterPhrase, description: "If the phrase introduces a purpose, try “to” before the action." }],
+  ["as a result of", { prefix: clauseBeginning, suffix: wordAfterPhrase, description: "If you’re introducing a cause, try “because of” for a shorter connection." }],
+  ["due to the fact that", {
+    blockedPrefix: causationAfterCopula,
+    suffix: wordAfterPhrase,
+    description: "Put the outcome first, then connect it directly to the cause with “because.”",
+  }],
+  ["furthermore", additiveTransition],
+  ["moreover", additiveTransition],
+  ["in conclusion", { prefix: clauseBeginning, suffix: transitionPunctuation, description: "If this is the beginning of your wrap-up, try “to sum up.”" }],
+  ["has the ability to", {
+    blockedPrefix: clauseBeginning,
+    suffix: positiveAction,
+    description: "Bring the main action forward while keeping the question structure and any negation.",
+  }],
   ["have the ability to", {
-    prefix: /(?:^|[.!?।॥！？,;:\r\n]|\b(?:and|but|so|because|when|if)\s+)\s*(?:i|you|we|they)\s+$/iu,
+    prefix: /(?:^|[.!?।॥！？,;:\r\n]|\b(?:because|although|when|if|that|whether)\s+)\s*(?:only\s+)?(?:i|you|we|they)\s+$/iu,
+    suffix: positiveAction,
     description: "Bring the main action closer to the start. Keep any tense or condition it depends on.",
   }],
+  ["in the event that", { suffix: wordAfterPhrase, description: "Use “if” followed by the complete condition." }],
+  ["with the exception of", { suffix: wordAfterPhrase, description: "Name the person or thing the rule excludes." }],
+  ["উপরন্তু", bengaliAdditiveTransition],
+  ["অধিকন্তু", bengaliAdditiveTransition],
+  ["তদুপরি", bengaliAdditiveTransition],
+  ["পরিশেষে", { prefix: clauseBeginning, suffix: transitionPunctuation, description: "If this introduces your last point, try “শেষে” at the start of the wrap-up." }],
 ]);
 
 function phrasePattern(phrase) {
@@ -163,7 +212,8 @@ function inspectStyle(text, wordCount) {
   const lengthWeight = longSentences.reduce((total, sentence) => total + Math.min(6, (sentence.words.length - 25) * 0.6), 0);
   const variationWeight = sentenceVariationWeight(sentences);
   const signal = phraseWeight * scale + Math.min(12, lengthWeight * scale) + Math.min(12, repeatedOpenings.length * 4 * scale) + variationWeight;
-  const score = Math.round(18 + 81 * (1 - Math.exp(-signal / 65)));
+  const ruleScore = Math.round(18 + 81 * (1 - Math.exp(-signal / 65)));
+  const score = blendWritingStyleScore(text, ruleScore, wordCount);
 
   return { score, matches, longSentences, repeatedOpenings };
 }
@@ -192,16 +242,33 @@ function makeSuggestion(text, options) {
   return { id: `${id}-${start}-${end}`, kind, title, description, start, end, original: text.slice(start, end), replacement, impact };
 }
 
-function phraseSuggestions(text, matches, score) {
+function contextualMatches(text, matches) {
+  return matches.flatMap((match) => {
+    const { rule, prefix, start, end } = match;
+    if (rule.replacement === null) return [match];
+
+    const original = text.slice(start, end);
+    const looksLikeTitle = original !== original.toUpperCase() && /\s+\p{Lu}/u.test(original);
+    if (looksLikeTitle) return [];
+
+    const context = contextualEdits.get(rule.phrase);
+    if (!context) return [match];
+
+    const suffix = text.slice(end, end + 100);
+    const canApply = (!context.prefix || context.prefix.test(prefix))
+      && (!context.blockedPrefix || !context.blockedPrefix.test(prefix))
+      && (!context.suffix || context.suffix.test(suffix));
+    if (canApply) return [match];
+
+    return [{ ...match, rule: { ...rule, replacement: null, description: context.description } }];
+  });
+}
+
+function phraseSuggestions(text, matches, score, sentenceSplits) {
   const automatic = [];
   const manual = [];
-  const candidates = matches.map((match) => {
-    const context = contextualEdits.get(match.rule.phrase);
-    if (!context || context.prefix.test(match.prefix)) return match;
-
-    const rule = { ...match.rule, replacement: null, description: context.description };
-    return { ...match, rule };
-  }).sort((left, right) => right.rule.weight - left.rule.weight || left.start - right.start);
+  const candidates = contextualMatches(text, matches)
+    .sort((left, right) => right.rule.weight - left.rule.weight || left.start - right.start);
 
   for (const { rule, start, end } of candidates) {
     if (rule.replacement === null && manual.length < maximumSuggestions) {
@@ -213,7 +280,7 @@ function phraseSuggestions(text, matches, score) {
   const verificationLimit = text.length > 50000 ? 4 : 16;
   const replaceable = candidates.filter(({ rule }) => rule.replacement !== null);
 
-  for (const { rule, start, end } of replaceable.slice(0, verificationLimit)) {
+  for (const { rule, start, end } of [...replaceable, ...sentenceSplits].slice(0, verificationLimit)) {
     const replacement = matchCapitalization(text.slice(start, end), rule.replacement);
     const edited = text.slice(0, start) + replacement + text.slice(end);
     const editedWordCount = wordsIn(edited).length;
@@ -223,14 +290,13 @@ function phraseSuggestions(text, matches, score) {
     if (impact > 0) automatic.push(makeSuggestion(text, { ...rule, start, end, replacement, impact }));
   }
 
-  if (automatic.length === 0 && manual.length === 0) {
-    const examples = new Set();
-    for (const { rule, start, end } of replaceable) {
-      if (examples.has(rule.id)) continue;
-      examples.add(rule.id);
-      manual.push(makeSuggestion(text, { ...rule, start, end, replacement: null }));
-      if (manual.length === maximumSuggestions) break;
-    }
+  const examples = new Set();
+  const autoIds = new Set(automatic.map(({ id }) => id));
+  for (const { rule, start, end } of replaceable) {
+    if (manual.length === maximumSuggestions) break;
+    if (examples.has(rule.id) || autoIds.has(`${rule.id}-${start}-${end}`)) continue;
+    examples.add(rule.id);
+    manual.push(makeSuggestion(text, { ...rule, start, end, replacement: null }));
   }
 
   automatic.sort((left, right) => right.impact - left.impact || left.start - right.start);
@@ -249,6 +315,65 @@ function collectSuggestions(candidates) {
   return suggestions;
 }
 
+function describeLongSentence(text, sentence) {
+  const length = `This sentence has ${sentence.words.length} words.`;
+  const visible = maskProtectedText(text.slice(sentence.start, sentence.end));
+  const joins = /[,;]\s+(?:but|so|then|yet|তবে|তাই|তারপর|কিন্তু)(?=\s)/giu;
+  for (const join of visible.matchAll(joins)) {
+    if (join.index < visible.length / 4 || join.index > visible.length * 3 / 4) continue;
+    const cue = wordsIn(visible.slice(join.index + 1)).slice(0, 3).map(([word]) => word).join(" ");
+    return `${length} Consider a break before “${cue}…” if both thoughts can stand on their own.`;
+  }
+  return `${length} Find the first complete thought and try starting a new sentence after it.`;
+}
+
+const splitProfiles = {
+  en: {
+    connector: /(?<=[\p{L}\p{N}]),[\t ]+(but|so|yet)(?=[\t ]+(?:i|you|we|they|he|she|it|this|that)[\t ]+(?:am|is|are|was|were|can|could|will|would|have|has|had|do|does|did)\b)/giu,
+    dependent: /^(?:although|because|if|when|while|unless|whether|before|after|since|as|though)\b|\b(?:not (?:only|just|merely)|either|neither)\b/iu,
+    complete: /\b(?:am|is|are|was|were|can|could|will|would|have|has|had|do|does|did|said|made|went|kept|told|found|[a-z]{3,}ed)\b/iu,
+    separator: ".",
+  },
+  bn: {
+    connector: /(?<=[\p{L}\p{M}\p{N}]),[\t ]+(কিন্তু|তবে|তাই|তারপর)(?=[\t ]+(?:আমি|আমরা|সে|তিনি|তারা|তাঁরা|ওরা|আপনি|আপনারা|তুমি|তোমরা)[\t ]+\p{L})/gu,
+    dependent: /^(?:যদিও|যদি|যেহেতু|যখন|যতক্ষণ|যতই)\s/u,
+    complete: /\s(?:হয়|হয়|হয়েছে|হয়েছিল|হয়নি|হলো|হল|হবে|আছে|ছিল|ছিলেন|নেই|করে|করি|করছি|করেন|করবে|করেছিল|করেছি|বলল|বলেন|বলেছিল|থাকে|যাবে|পারে|যায়|দিয়েছে|গেল|গেলাম)\s*$/u,
+    separator: "।",
+  },
+};
+
+function findSentenceSplit(text, sentence) {
+  const source = text.slice(sentence.start, sentence.end);
+  const ending = text.slice(sentence.end, sentence.end + 40);
+  if (source !== maskProtectedText(source) || /^[\t ]*(?:[!?।॥！？]*[?？]|["“‘«'])/u.test(ending)) return [];
+
+  const profile = splitProfiles[/\p{Script=Bengali}/u.test(source) ? "bn" : "en"];
+  if (profile.dependent.test(source)) return [];
+
+  const choices = Array.from(source.matchAll(profile.connector))
+    .sort((left, right) => Math.abs(left.index - source.length / 2) - Math.abs(right.index - source.length / 2));
+  for (const match of choices) {
+    const before = source.slice(0, match.index);
+    const after = source.slice(match.index + match[0].length);
+    if (!profile.complete.test(before) || wordsIn(before).length < 9 || wordsIn(after).length < 9) continue;
+
+    const connector = match[1][0].toUpperCase() + match[1].slice(1);
+    const start = sentence.start + match.index;
+    return [{
+      rule: {
+        id: "sentence-break",
+        kind: "Long sentence",
+        title: "Give each thought its own beat",
+        description: "Start a new sentence at this pause and keep the connector so the relationship stays clear.",
+        replacement: `${profile.separator} ${connector}`,
+      },
+      start,
+      end: start + match[0].length,
+    }];
+  }
+  return [];
+}
+
 export function analyzeText(text) {
   const wordCount = wordsIn(text).length;
   if (wordCount < minimumWords) {
@@ -257,14 +382,15 @@ export function analyzeText(text) {
 
   const confidence = wordCount < 60 ? "Short sample" : wordCount < 180 ? "Moderate sample" : "Longer sample";
   const { score, matches, longSentences, repeatedOpenings } = inspectStyle(text, wordCount);
-  const { automatic, manual } = phraseSuggestions(text, matches, score);
+  const sentenceSplits = longSentences.slice(0, maximumSuggestions).flatMap((sentence) => findSentenceSplit(text, sentence));
+  const { automatic, manual } = phraseSuggestions(text, matches, score, sentenceSplits);
 
   for (const sentence of longSentences.slice(0, maximumSuggestions)) {
     manual.push(makeSuggestion(text, {
       id: "long-sentence",
       kind: "Long sentence",
       title: "Split this into spoken beats",
-      description: `This sentence has ${sentence.words.length} words. Try ending it after the first complete thought.`,
+      description: describeLongSentence(text, sentence),
       start: sentence.start,
       end: sentence.end,
     }));
@@ -282,4 +408,32 @@ export function analyzeText(text) {
 
   const suggestions = collectSuggestions([...automatic, ...manual]);
   return { score, wordCount, confidence, suggestions };
+}
+
+export function planBulkEdits(text, suggestions) {
+  const unchanged = { text, count: 0 };
+  if (!Array.isArray(suggestions) || suggestions.some((suggestion) => !suggestion || typeof suggestion !== "object")) return unchanged;
+  const edits = suggestions.filter((suggestion) => suggestion.replacement !== null)
+    .sort((left, right) => left.start - right.start);
+  if (edits.length === 0) return unchanged;
+
+  const current = analyzeText(text);
+  const available = new Map(current.suggestions.map((suggestion) => [suggestion.id, suggestion]));
+  let end = 0;
+  const parts = [];
+  for (const edit of edits) {
+    const expected = available.get(edit.id);
+    if (!expected || edit.start !== expected.start || edit.end !== expected.end
+      || edit.original !== expected.original || edit.replacement !== expected.replacement
+      || edit.start < end) return unchanged;
+
+    parts.push(text.slice(end, edit.start), edit.replacement);
+    end = edit.end;
+  }
+
+  const revised = parts.join("") + text.slice(end);
+  const wordCount = wordsIn(revised).length;
+  if (wordCount < minimumWords || inspectStyle(revised, wordCount).score >= current.score) return unchanged;
+
+  return { text: revised, count: edits.length };
 }

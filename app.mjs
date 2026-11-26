@@ -1,4 +1,4 @@
-import { analyzeText, minimumWords } from './analysis-engine.mjs';
+import { analyzeText, minimumWords, planBulkEdits } from './analysis-engine.mjs';
 import { playAnalysisMotion } from './analysis-motion.mjs';
 import { sampleScripts } from './sample-scripts.mjs';
 
@@ -29,6 +29,12 @@ const suggestionsList = byId('suggestions-list');
 const suggestionsEmpty = byId('suggestions-empty');
 const suggestionCount = byId('suggestion-count');
 const suggestionTemplate = byId('suggestion-template');
+const suggestionsTools = byId('suggestions-tools');
+const readyEditCount = byId('ready-edit-count');
+const acceptAllButton = byId('accept-all');
+const bulkDialog = byId('bulk-dialog');
+const bulkWarning = byId('bulk-warning');
+const confirmBulk = byId('confirm-bulk');
 const analysisStatus = byId('analysis-status');
 
 const localeNumber = new Intl.NumberFormat(document.documentElement.lang);
@@ -40,6 +46,7 @@ let result;
 let inputTimer;
 let manualAnalysis;
 let undoState;
+let pendingBulkEdit;
 let sampleIndex = 0;
 
 function drawGaugeTicks() {
@@ -58,10 +65,10 @@ function drawGaugeTicks() {
 }
 
 function describeScore(score) {
-  if (score < 30) return 'Low likelihood';
+  if (score < 30) return 'Few AI-style signals';
   if (score < 60) return 'Mixed signals';
-  if (score < 85) return 'Elevated likelihood';
-  return 'High likelihood';
+  if (score < 85) return 'Elevated style signals';
+  return 'Strong style signals';
 }
 
 function announceAnalysis(change = 0) {
@@ -69,7 +76,7 @@ function announceAnalysis(change = 0) {
   const changeDescription = change ? ` ${formatCount(Math.abs(change), 'point', 'points')} ${change < 0 ? 'lower' : 'higher'}.` : '';
   analysisStatus.textContent = score === null
     ? scoreNote.textContent
-    : `AI likelihood estimate ${score}%.${changeDescription} ${formatCount(suggestions.length, 'suggestion', 'suggestions')}.`;
+    : `AI-style score ${score}%.${changeDescription} ${formatCount(suggestions.length, 'suggestion', 'suggestions')}.`;
 }
 
 function showScore(previousScore, announce) {
@@ -84,7 +91,7 @@ function showScore(previousScore, announce) {
   scoreNumber.textContent = hasScore ? localeNumber.format(score) : '—';
   scorePercent.hidden = !hasScore;
   scoreCaption.textContent = caption;
-  gauge.setAttribute('aria-label', hasScore ? `${score}% AI likelihood estimate. ${caption}.` : 'AI likelihood estimate unavailable');
+  gauge.setAttribute('aria-label', hasScore ? `${score}% AI-style score. ${caption}.` : 'AI-style score unavailable');
   scoreNote.textContent = hasScore ? scoreExplanation : `Enter at least ${minimumWords} words for a writing-style estimate.`;
 
   const change = hasScore && previousScore !== undefined && previousScore !== null ? score - previousScore : 0;
@@ -215,10 +222,13 @@ function renderSuggestion(suggestion) {
 function showSuggestions() {
   const { score, suggestions } = result;
   const count = suggestions.length;
+  const ready = suggestions.filter(({ replacement }) => replacement !== null).length;
   const actions = () => [...suggestionsList.querySelectorAll('button:not([hidden])')];
   const focusedIndex = suggestionsList.contains(document.activeElement) ? actions().indexOf(document.activeElement) : -1;
   suggestionCount.textContent = localeNumber.format(count);
   suggestionCount.setAttribute('aria-label', formatCount(count, 'suggestion', 'suggestions'));
+  suggestionsTools.hidden = ready === 0;
+  readyEditCount.textContent = `${formatCount(ready, 'edit', 'edits')} ready`;
   suggestionsList.replaceChildren(...suggestions.map(renderSuggestion));
   suggestionsEmpty.hidden = count > 0;
 
@@ -263,6 +273,41 @@ function checkCurrentSuggestion() {
 function rememberEditor() {
   return { value: script.value, start: script.selectionStart, end: script.selectionEnd, scrollTop: script.scrollTop };
 }
+
+acceptAllButton.addEventListener('click', () => {
+  if (!checkCurrentSuggestion()) return;
+
+  const plan = planBulkEdits(analyzedSource, result.suggestions);
+  if (!plan.count) {
+    showMessage('These edits could not be applied together. Review them individually.');
+    return;
+  }
+
+  pendingBulkEdit = { source: analyzedSource, ...plan };
+  bulkWarning.textContent = `This will change ${formatCount(plan.count, 'passage', 'passages')} in your script at once.`;
+  confirmBulk.textContent = `Apply ${formatCount(plan.count, 'edit', 'edits')}`;
+  bulkDialog.returnValue = 'cancel';
+  bulkDialog.showModal();
+});
+
+bulkDialog.addEventListener('close', () => {
+  const pending = pendingBulkEdit;
+  pendingBulkEdit = undefined;
+  if (bulkDialog.returnValue !== 'accept' || !pending) return;
+  if (script.value !== pending.source) {
+    refreshAnalysis({ announce: true });
+    showMessage('Your script changed. Review the updated suggestions before applying them.');
+    return;
+  }
+
+  const previous = rememberEditor();
+  script.value = pending.text;
+  script.setSelectionRange(previous.start, previous.start);
+  script.scrollTop = previous.scrollTop;
+  refreshAnalysis({ announce: true });
+  showMessage(`${formatCount(pending.count, 'edit', 'edits')} applied.`, previous);
+  undoButton.focus();
+});
 
 function showMessage(message = '', previous) {
   undoState = previous;

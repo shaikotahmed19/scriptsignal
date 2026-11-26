@@ -977,6 +977,69 @@ svg {
   white-space: nowrap;
 }
 
+.suggestions-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-width: 0;
+  margin: 0 1.35rem .75rem;
+  padding-block: .55rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .8125rem;
+  font-weight: 650;
+}
+
+.accept-all {
+  flex: none;
+  min-height: 2.15rem;
+  padding: .4rem .62rem;
+}
+
+.bulk-dialog {
+  width: min(27rem, calc(100% - 2rem));
+  padding: 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1.15rem;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1.1rem 3rem #17201752;
+}
+
+.bulk-dialog::backdrop {
+  background: #151d15a1;
+  backdrop-filter: blur(3px);
+}
+
+.bulk-dialog h2 {
+  font-size: 1.25rem;
+  letter-spacing: -.03em;
+}
+
+.bulk-dialog p {
+  margin-top: .64rem;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.bulk-dialog .bulk-warning {
+  padding: .62rem .72rem;
+  border: 1px solid color-mix(in srgb, #c58a49 36%, var(--line));
+  border-radius: .64rem;
+  background: color-mix(in srgb, #c58a49 13%, var(--paper));
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.bulk-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: 1.15rem;
+}
+
 .suggestions-list {
   display: grid;
   gap: .72rem;
@@ -1350,6 +1413,10 @@ svg {
   .editor-body,
   .suggestions-list {
     padding-inline: 1rem;
+  }
+
+  .suggestions-tools {
+    margin-inline: 1rem;
   }
 
   .score-note {
