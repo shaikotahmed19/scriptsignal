@@ -77,15 +77,15 @@
       </a>
       <div class="header-controls">
         <span class="header-status"><span class="status-dot"></span> On-device analysis</span>
-        <div class="theme-control">
+        <div class="dropdown-field theme-control">
           <label class="sr-only" for="theme-select">Color theme</label>
           <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg>
-          <select class="theme-select" id="theme-select">
+          <select class="dropdown theme-select" id="theme-select">
             <option value="system">Default</option>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
           </select>
-          <svg class="theme-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="dropdown-chevron" aria-hidden="true"></span>
         </div>
       </div>
     </div>
@@ -190,10 +190,13 @@
           <div class="gauge-scale" aria-hidden="true"><span>Low</span><span id="score-change" class="score-change" hidden></span><span>High</span></div>
           <div class="score-format">
             <label for="text-format">Text format</label>
-            <select id="text-format" aria-describedby="score-note">
-              <option value="auto">Auto</option>
-              <option value="dialogue">Dialogue / transcript</option>
-            </select>
+            <div class="dropdown-field">
+              <select class="dropdown format-select" id="text-format" aria-describedby="score-note">
+                <option value="auto">Auto</option>
+                <option value="dialogue">Dialogue / transcript</option>
+              </select>
+              <span class="dropdown-chevron" aria-hidden="true"></span>
+            </div>
           </div>
           <p class="score-note"><svg aria-hidden="true"><use href="#icon-info"/></svg><span id="score-note">The score reflects writing style. Verifying authorship requires other evidence.</span></p>
         </section>
