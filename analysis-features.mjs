@@ -125,7 +125,7 @@ export function styleFeatures(source, language) {
     colons: marks(/:/g),
     questions: marks(/\?/g),
     exclamations: marks(/!/g),
-    dashPunctuation: marks(/[—–]| - /g),
+    dashPunctuation: marks(/[—–]|(?<=\s)-(?=\s)/g),
     parentheses: marks(/\(/g),
     quotationMarks: marks(/[“”"]/g),
     ...lexical,

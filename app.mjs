@@ -25,6 +25,7 @@ const analysisSpinner = byId('analysis-spinner');
 const analysisIndicator = byId('analysis-indicator');
 const loadSampleButton = byId('load-sample');
 const editorMessage = byId('editor-message');
+const draftNotice = byId('draft-notice');
 const messageText = byId('editor-message-text');
 const undoButton = byId('undo-edit');
 const suggestionsList = byId('suggestions-list');
@@ -43,11 +44,13 @@ const localeNumber = new Intl.NumberFormat(document.documentElement.lang);
 const scoreExplanation = scoreNote.textContent;
 const compactLayout = matchMedia('(max-width: 47.5rem)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const workerThreshold = 32000;
+const workerThreshold = 12000;
+const draftKey = 'scriptsignal.draft.v1';
 let analyzedSource;
 let analyzedFormat;
 let result;
 let inputTimer;
+let draftTimer;
 let manualAnalysis;
 let workerJob;
 let composing = false;
@@ -55,6 +58,32 @@ let undoState;
 let pendingBulkEdit;
 let previewingSamples = false;
 let sampleIndex = 0;
+
+function readDraft() {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(draftKey));
+    if (typeof draft?.source === 'string') return draft;
+  } catch {
+    // The editor can still work without access to tab storage.
+  }
+  return null;
+}
+
+function saveDraft() {
+  clearTimeout(draftTimer);
+  const source = previewingSamples ? undoState.value : script.value;
+  try {
+    sessionStorage.setItem(draftKey, JSON.stringify({ source, format: textFormat.value }));
+    draftNotice.hidden = true;
+  } catch {
+    draftNotice.hidden = false;
+  }
+}
+
+function scheduleDraftSave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 240);
+}
 
 function drawGaugeTicks() {
   const ticks = byId('gauge-ticks');
@@ -269,7 +298,7 @@ function renderSuggestion(suggestion) {
       if (!checkCurrentSuggestion()) return;
       const previous = rememberEditor();
       script.setRangeText(replacement, start, end, 'select');
-      showMessage('Edit applied.', previous);
+      recordEditorChange('Edit applied.', previous);
       refreshAnalysis({
         announce: true,
         onComplete: () => {
@@ -290,7 +319,7 @@ function renderSuggestion(suggestion) {
 }
 
 function showSuggestions() {
-  const { score, suggestions } = result;
+  const { score, method, suggestions } = result;
   const count = suggestions.length;
   const ready = suggestions.filter(({ replacement }) => replacement !== null).length;
   const actions = () => [...suggestionsList.querySelectorAll('button:not([hidden])')];
@@ -304,7 +333,11 @@ function showSuggestions() {
   suggestionsEmpty.hidden = count > 0;
 
   if (!count) {
-    suggestionsEmpty.textContent = score === null ? 'Add more of your script to get targeted editing suggestions.' : 'No specific edits stood out. You can keep editing the script directly.';
+    if (method === 'worker-unavailable') {
+      suggestionsEmpty.textContent = 'Try a shorter excerpt to get editing suggestions.';
+    } else {
+      suggestionsEmpty.textContent = score === null ? 'Add more of your script to get targeted editing suggestions.' : 'No specific edits stood out. You can keep editing the script directly.';
+    }
   }
 
   if (focusedIndex !== -1) {
@@ -320,13 +353,14 @@ function refreshAnalysis({ announce = false, compare = true, recheck = false, on
   delete scoreCard.dataset.analysisReveal;
   const source = script.value;
   const format = textFormat.value;
+  setEditorControls();
   if (!recheck && source === analyzedSource && format === analyzedFormat) {
     if (suggestionsList.hidden) showSuggestions();
     if (announce) announceAnalysis();
     onComplete?.();
     return;
   }
-  const previousScore = compare && analyzedFormat === format ? result?.score : undefined;
+  const previousAnalysis = compare && analyzedFormat === format ? result : undefined;
   const render = ({ analysis, characterCount: characters }) => {
     if (source !== script.value || format !== textFormat.value) return;
     analyzedSource = source;
@@ -334,8 +368,7 @@ function refreshAnalysis({ announce = false, compare = true, recheck = false, on
     result = analysis;
     wordCount.textContent = analysis.wordCount === null ? '— words' : formatCount(analysis.wordCount, 'word', 'words');
     characterCount.textContent = characters === null ? '— characters' : formatCount(characters, 'character', 'characters');
-    setEditorControls();
-    showScore(previousScore, announce);
+    showScore(previousAnalysis?.method === analysis.method ? previousAnalysis.score : undefined, announce);
     showSuggestions();
     onComplete?.();
   };
@@ -381,7 +414,12 @@ acceptAllButton.addEventListener('click', () => {
   const openConfirmation = (plan) => {
     if (script.value !== source || textFormat.value !== format) return;
     if (!plan.count) {
-      showMessage('These edits could not be applied together. Review them individually.');
+      const reason = {
+        'too-short': `Together these edits would leave fewer than ${minimumWords} words of prose. Review the edits individually.`,
+        'different-method': 'Together these edits would switch how the script is scored. Review the edits individually.',
+        'no-score-decrease': 'Together these edits do not lower the score. Review the edits individually.',
+      }[plan.reason];
+      showMessage(reason ?? 'These edits could not be applied together. Review them individually.');
       return;
     }
 
@@ -424,16 +462,21 @@ bulkDialog.addEventListener('close', () => {
   script.setSelectionRange(previous.start, previous.start);
   script.scrollTop = previous.scrollTop;
   refreshAnalysis({ announce: true });
-  showMessage(`${formatCount(pending.count, 'edit', 'edits')} applied.`, previous);
+  recordEditorChange(`${formatCount(pending.count, 'edit', 'edits')} applied.`, previous);
   undoButton.focus();
 });
 
-function showMessage(message = '', previous) {
-  previewingSamples = false;
-  undoState = previous;
+function showMessage(message) {
   editorMessage.hidden = !message;
   messageText.textContent = message;
   undoButton.hidden = !undoState;
+}
+
+function recordEditorChange(message, previous) {
+  previewingSamples = false;
+  undoState = previous;
+  showMessage(message);
+  scheduleDraftSave();
 }
 
 function selectPassage(start, end) {
@@ -466,7 +509,7 @@ function selectPassage(start, end) {
 function queueAnalysis(event) {
   stopManualAnalysis();
   stopWorkerJob();
-  showMessage();
+  recordEditorChange('');
   setEditorControls();
   clearTimeout(inputTimer);
   if (composing || event.isComposing) return;
@@ -492,13 +535,16 @@ script.addEventListener('keydown', (event) => {
 });
 
 analyzeButton.addEventListener('click', () => startManualAnalysis(true));
-textFormat.addEventListener('change', () => refreshAnalysis({ announce: true, compare: false }));
+textFormat.addEventListener('change', () => {
+  scheduleDraftSave();
+  refreshAnalysis({ announce: true, compare: false });
+});
 
 clearButton.addEventListener('click', () => {
   const previous = rememberEditor();
   script.value = '';
   refreshAnalysis({ compare: false });
-  showMessage('Script cleared.', previous);
+  recordEditorChange('Script cleared.', previous);
   script.focus();
 });
 
@@ -512,8 +558,10 @@ loadSampleButton.addEventListener('click', () => {
   script.scrollTop = 0;
   script.setSelectionRange(0, 0);
   refreshAnalysis({ announce: true, compare: false });
-  showMessage('Sample loaded.', previous);
+  undoState = previous;
   previewingSamples = true;
+  showMessage('Sample loaded.');
+  scheduleDraftSave();
 });
 
 undoButton.addEventListener('click', () => {
@@ -524,10 +572,13 @@ undoButton.addEventListener('click', () => {
   script.setSelectionRange(previous.start, previous.end);
   script.scrollTop = previous.scrollTop;
   refreshAnalysis({ announce: true });
-  showMessage('Last change undone.');
+  recordEditorChange('Last change undone.');
 });
 
+window.addEventListener('pagehide', saveDraft);
 drawGaugeTicks();
-script.value = sampleScripts[sampleIndex];
+const draft = readDraft();
+script.value = draft?.source ?? sampleScripts[sampleIndex];
+textFormat.value = draft?.format === 'dialogue' ? 'dialogue' : 'auto';
 script.setSelectionRange(0, 0);
 refreshAnalysis();

@@ -18,10 +18,10 @@ Open [ScriptSignal on localhost](http://127.0.0.1:4173/).
 
 ## Analyze and edit a script
 
-1. Paste at least 20 words of prose into the **Script editor**, or choose **Load sample** to cycle through English and Bengali examples. **Undo** restores the draft you had before browsing samples.
+1. Paste at least 20 words of prose into the **Script editor**, or choose **Load sample** to cycle through English and Bengali examples. **Undo** restores the draft you had before browsing samples. A refresh in the same tab restores that draft and its format when tab storage is available.
 2. Read the live score or select **Analyze script** to run a scan on demand. Blocks of script text travel from the editor into the gauge before the result appears.
 3. Review the suggestions. **Apply edit** inserts the previewed replacement and recalculates the score. **Find in script** selects the passage so you can edit it yourself.
-4. Choose **Accept all** to review how many passages will change. Confirm to apply the ready edits together, or choose **Cancel**. **Undo** restores the script before the last edit or batch.
+4. Choose **Accept all** to review how many passages will change. Confirm to apply the ready edits together, or choose **Cancel**. If the combined change leaves too little prose or changes the scoring method, the editor explains why the batch needs individual review. **Undo** restores the script before the last edit or batch.
 
 ## Choose a theme
 
@@ -29,7 +29,7 @@ The header menu offers **Default**, **Light**, and **Dark**. Default follows the
 
 ## How the score works
 
-ScriptSignal blends a local statistical model with rules for formulaic phrasing, repeated openings, and sentence length. Short samples give more weight to the rules. Choose **Dialogue / transcript** for conversations, interviews, or podcast scripts to get a rules-based score and spoken-delivery advice. **Auto** recognizes repeated speaker labels and uses the dominant writing script to select the prose model. The percentage describes writing style. Verifying authorship requires other evidence.
+ScriptSignal blends a local statistical model with rules for formulaic phrasing, repeated openings, and sentence length. Short samples give more weight to the rules. Choose **Dialogue / transcript** for conversations, interviews, or podcast scripts, including transcripts without speaker labels. This gives a rules-based score and spoken-delivery advice. **Auto** recognizes repeated speaker labels and uses the dominant writing script to select the prose model. The percentage describes writing style. Verifying authorship requires other evidence.
 
 Each one-click edit has to match the current passage exactly and lower the displayed score on a fresh check. A batch has to pass the same score check after all its edits are combined. Suggestions that need judgment or new details appear as manual advice.
 
@@ -47,7 +47,7 @@ The original benchmark compared baseline `16b144d` with model release `9bedcbe`.
 | TextPulse academic English | 60 | 0.611 → 0.723 | 18/30 | 8/30 |
 | Podcast excerpts | 12 | 0.472 → 0.208 | 0/6 | 1/6 |
 
-On the same 60 TextPulse academic texts, archived GPTZero, Copyleaks, Originality.ai, Pangram, and Turnitin scores each flagged 30 of 30 machine texts and zero human texts at the study comparison cutoff. They differed on the separate 30 mixed-authorship texts. These are archived scores for this sample. [TextPulse replication data](https://doi.org/10.5281/zenodo.22003419)
+On the same 60 TextPulse academic texts, archived GPTZero, Copyleaks, Originality.ai, Pangram, and Turnitin scores each flagged 30 of 30 machine texts and zero human texts at the study's 50-point comparison cutoff. They differed on the separate 30 mixed-authorship texts. The vendor scans were collected on August 18, 2026. The corresponding ScriptSignal results were rerun locally. [TextPulse study](https://textpulse.ai/research/ai-detector-agreement) · [Replication data](https://doi.org/10.5281/zenodo.22003419)
 
 The podcast check used six pre-2020 NASA podcast transcripts and six published AI podcast scripts. Each excerpt used a 220-word window and removed speaker and stage markers. The updated score performed worse than the baseline on this small cross-source sample, so the prose benchmark results should be read in their own domain. [NASA podcast transcripts](https://www.nasa.gov/podcasts/houston-we-have-a-podcast/) · [Model-Chronicle AI scripts](https://huggingface.co/datasets/My-Weird-Prompts/Model-Chronicle)
 
@@ -59,9 +59,9 @@ The fresh English holdout included 24 excerpts from pre-2021 NASA and NOAA podca
 
 A second check used four NotebookLM podcast transcripts and four of those human excerpts. Auto flagged **0/4 AI** and **0/4 human**. A trial speech model caught two of the four NotebookLM texts and incorrectly flagged three of six human excerpts in the earlier podcast set. The released dialogue workflow uses editing rules. [NotebookLM podcast transcripts](https://doi.org/10.18710/RNTF9H)
 
-After the input and editing fixes, the same prose retests flagged **189/223 AI and 12/223 human** on RAID, **76/198 AI and 14/198 human** on IndicTextFake, and **342/358 AI and 60/358 human** on BHAID. The TextPulse academic comparison remained at **18/30 AI and 8/30 human** flags. All 32 ready batches across RAID, IndicTextFake, and BHAID passed the combined score check. One-click edits remain sparse in the spoken samples, which returned manual advice.
+After the latest editing fixes, the same prose retests flagged **189/223 AI and 12/223 human** on RAID, **76/198 AI and 14/198 human** on IndicTextFake, and **342/358 AI and 59/358 human** on BHAID. The TextPulse academic comparison remained at **18/30 AI and 8/30 human** flags. Across the three prose datasets, 783 of 1,558 texts received suggestions and all 32 ready batches passed the combined score check. The spoken holdout returned manual advice. Auto also missed all three AI samples in the six-excerpt Bengali spoken check.
 
-Browser checks covered bilingual paste, numbers and fenced code, the phone layout, restoration after three sample previews, full analysis of a 363,000-character draft, a long batch with protected code, and cancellation when a new draft replaces an in-flight background job.
+The latest browser checks covered bilingual draft restoration, refresh during sample preview, three distinct sample previews, a cleared draft surviving refresh, theme preferences on a phone-width layout, batch confirmation and cancellation, and Undo. A 22,000-word paste was counted in full, restored after refresh, and replaced during an in-flight analysis. The editing regression checks also cover role names, stage directions, rates, and scripts pasted with hard line breaks.
 
 ### Data and repeatable checks
 

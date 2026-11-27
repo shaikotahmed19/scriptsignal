@@ -713,6 +713,11 @@ svg {
   text-underline-offset: .17em;
 }
 
+.draft-notice {
+  margin: .65rem 0 0;
+  font-size: .875rem;
+}
+
 .editor-footer {
   min-width: 0;
   display: flex;

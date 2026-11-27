@@ -25,6 +25,10 @@ const protectedPatterns = [
   /(?<![\p{L}\p{M}\p{N}])'[^\r\n]{1,1000}?'(?![\p{L}\p{M}\p{N}])/,
 ];
 const protectedPattern = new RegExp(protectedPatterns.map((pattern) => pattern.source).join("|"), "gimu");
+const scriptCue = /^[ \t]*\p{Lu}[\p{Lu}\p{N}'’.-]*(?:[ \t]+[\p{Lu}\p{N}][\p{Lu}\p{N}'’.-]*){0,2}(?:[ \t]+\([\p{Lu}\p{N} .’'/-]+\))?(?<!\.)(?=[ \t]*(?:\r?$|:))/u;
+const scriptCuePattern = new RegExp(scriptCue.source, "gmu");
+const directionLinePattern = /^[ \t]*(?:\([^\r\n]*\)|\[[^\r\n]*\])[ \t]*(?=\r?$)/gmu;
+const structuralLine = /^[ \t]*(?:[#>]|\[|\(|[-+*][ \t]|\d{1,4}[.)][ \t]|\d{1,2}:\d{2}|[\p{Lu}\p{Script=Bengali}][\p{L}\p{M}\p{N}'’-]{1,24}(?:[ \t]+[\p{Lu}\p{Script=Bengali}][\p{L}\p{M}\p{N}'’-]{1,24}){0,2}[ \t]*:)/u;
 
 const rules = [
   ["in today's fast-paced world", "Generic opening", "Open on a real moment", "Name a scene your audience recognizes. A specific moment gives your listener something to picture.", 13],
@@ -61,7 +65,7 @@ const rules = [
   ["পরিশেষে", "Formal transition", "Make the ending conversational", "“শেষে” gives the same closing cue in simple spoken Bengali.", 9, "শেষে"],
   ["at the present time", "Filler phrase", "Shorten the time reference", "“Now” keeps the present-time reference in fewer words.", 8, "now"],
   ["at a later date", "Filler phrase", "Shorten the time reference", "“Later” keeps the timing open and takes less time to say.", 7, "later"],
-  ["in the event that", "Formal wording", "State the condition simply", "“If” keeps the same condition in everyday language.", 8, "if"],
+  ["in the event that", "Formal wording", "State the condition simply", "If this introduces a condition, try “if” followed by the complete subject and action. Keep the event itself if you mean an occasion.", 8],
   ["with the exception of", "Formal wording", "State the exception directly", "“Except for” keeps the same exception in fewer words.", 7, "except for"],
   ["on a weekly basis", "Formal wording", "Say how often directly", "“Every week” keeps the same schedule in fewer words.", 8, "every week"],
   ["on a monthly basis", "Formal wording", "Say how often directly", "“Every month” keeps the same schedule in fewer words.", 8, "every month"],
@@ -86,6 +90,7 @@ const clauseBeginning = /(?:^|[.!?।॥！？,;:\r\n])\s*$/u;
 const wordAfterPhrase = /^[\t \u00A0]+\p{L}/u;
 const positiveAction = /^[\t \u00A0]+(?!(?:not|never)\b)\p{L}/iu;
 const transitionPunctuation = /^[\t \u00A0]*[,—–]/u;
+const capitalizedVerbObject = /^[\t \u00A0]+(?:a|an|the|this|these|that|those|our|your|their|her|his|its|my|any|some|each|at|on|by|with)\b/iu;
 const causationAfterCopula = /(?:\b(?:am|is|are|was|were|be|been|being)(?:n['’]t)?|['’](?:m|s|re))(?:\s+(?:not|never|just|only|almost|also|still|\p{L}+ly))*\s*$/iu;
 const additiveTransition = {
   prefix: clauseBeginning,
@@ -100,8 +105,10 @@ const bengaliAdditiveTransition = {
 const ratesBeforeBasis = /\b(?:express(?:ed|es|ing)?|convert(?:ed|s|ing)?|prorat(?:e|ed|es|ing)|quot(?:e|ed|es|ing)|normali[sz](?:e|ed|es|ing)|interest|rates?|prices?|costs?|fees?|salary|salaries|wages?|dollars?|currency|rent|payments?)\b[^.!?।॥！？;:\r\n]{0,86}$/iu;
 const recurringBasis = (unit) => ({
   blockedPrefix: ratesBeforeBasis,
+  blockedSuffix: /^\s+(?:rates?|prices?|costs?|fees?|charges?|rents?|wages?|salar(?:y|ies)|payments?)\b/iu,
   description: `For a rate, consider “per ${unit}” to keep its unit clear. Use “every ${unit}” when an action repeats.`,
 });
+const bengaliRateWord = "(?:হার|ভাড়া|ভাড়া|মজুরি|বেতন|মূল্য|দাম|কিস্তি|ফি|টাকা|খরচ|ব্যয়|ব্যয়)(?:ের|র)?";
 const contextualEdits = new Map([
   ["in order to", { prefix: clauseBeginning, suffix: wordAfterPhrase, description: "If the phrase introduces a purpose, try “to” before the action." }],
   ["as a result of", { prefix: clauseBeginning, suffix: wordAfterPhrase, description: "If you’re introducing a cause, try “because of” for a shorter connection." }],
@@ -114,7 +121,7 @@ const contextualEdits = new Map([
   ["moreover", additiveTransition],
   ["in conclusion", { prefix: clauseBeginning, suffix: transitionPunctuation, description: "If this is the beginning of your wrap-up, try “to sum up.”" }],
   ["has the ability to", {
-    blockedPrefix: clauseBeginning,
+    blockedPrefix: /(?:^|[.!?।॥！？,;:\r\n]|\b(?:how|why|when|where|whether|if|what)\b)\s*$/iu,
     suffix: positiveAction,
     description: "Bring the main action forward while keeping the question structure and any negation.",
   }],
@@ -123,12 +130,17 @@ const contextualEdits = new Map([
     suffix: positiveAction,
     description: "Bring the main action closer to the start. Keep any tense or condition it depends on.",
   }],
-  ["in the event that", { suffix: wordAfterPhrase, description: "Use “if” followed by the complete condition." }],
   ["with the exception of", { suffix: wordAfterPhrase, description: "Name the person or thing the rule excludes." }],
   ["at the present time", { blockedSuffix: /^\s+of\b/iu, description: "Keep the time tied to the event named after “of”. Consider naming that event directly." }],
+  ["at a later date", { blockedSuffix: /^\s+(?:of|than|that|which)\b/iu, description: "Keep the date or date comparison if it matters to the timing." }],
   ["on a daily basis", recurringBasis("day")],
   ["on a weekly basis", recurringBasis("week")],
   ["on a monthly basis", recurringBasis("month")],
+  ["প্রতিদিনের ভিত্তিতে", {
+    blockedPrefix: new RegExp(`(?<!${wordCharacter})${bengaliRateWord}(?!${wordCharacter})[^.!?।॥！？;:\\r\\n]{0,70}$`, "u"),
+    blockedSuffix: new RegExp(`^\\s+${bengaliRateWord}(?!${wordCharacter})`, "u"),
+    description: "Use “দিনপ্রতি” for a rate per day. Use “প্রতিদিন” when the action repeats each day.",
+  }],
   ["উপরন্তু", bengaliAdditiveTransition],
   ["অধিকন্তু", bengaliAdditiveTransition],
   ["তদুপরি", bengaliAdditiveTransition],
@@ -153,7 +165,20 @@ function normalizePhrase(phrase) {
 
 function maskProtectedText(text) {
   // Keep all UTF-16 offsets aligned with the editor's original text.
-  return text.replace(protectedPattern, (match) => match.replace(/[^\r\n.!?।॥！？]/g, "\0"));
+  const mask = (match) => match.replace(/[^\r\n.!?।॥！？]/g, "\0");
+  return text.replace(directionLinePattern, mask).replace(protectedPattern, mask).replace(scriptCuePattern, mask);
+}
+
+function softenLineBreaks(text, eligibleText) {
+  if (!/[\r\n]/u.test(text)) return eligibleText;
+
+  const boundaries = text.split(/\r\n|\r|\n/u).map((line) => !line.trim() || structuralLine.test(line) || scriptCue.test(line));
+  let index = 0;
+  return eligibleText.replace(/\r\n|\r|\n/gu, (newline) => {
+    const beforeBoundary = boundaries[index++];
+    if (beforeBoundary || boundaries[index]) return newline;
+    return " ".repeat(newline.length);
+  });
 }
 
 export const sampleText = `In today’s fast-paced world, it is easy to think that change only comes from big decisions. In reality, small habits can make a meaningful difference.
@@ -169,8 +194,10 @@ function wordsIn(text) {
 }
 
 function proseIn(text, originalWords) {
-  const evidenceText = text.replace(nonProsePattern, (match) => /[\r\n]/.test(match) ? "\n" : " ");
-  const words = evidenceText === text && originalWords ? originalWords : wordsIn(evidenceText);
+  const evidenceText = text.replace(nonProsePattern, (match) => /[\r\n]/.test(match) ? "\n" : " ").replace(directionLinePattern, " ");
+  // Keep speaker cues for dialogue detection while excluding them from the prose minimum.
+  const proseText = evidenceText.replace(scriptCuePattern, " ");
+  const words = proseText === text && originalWords ? originalWords : wordsIn(proseText);
   let proseWordCount = 0;
   for (const [word] of words) {
     if (/\p{L}/u.test(word)) proseWordCount += 1;
@@ -200,7 +227,7 @@ function sentencesIn(text) {
 }
 
 function inspectStyle(text, { evidenceText, proseWordCount }, format) {
-  const eligibleText = maskProtectedText(text);
+  const eligibleText = softenLineBreaks(text, maskProtectedText(text));
   const sentences = sentencesIn(eligibleText);
   let phraseWeight = 0;
   const matches = [];
@@ -209,11 +236,18 @@ function inspectStyle(text, { evidenceText, proseWordCount }, format) {
     const rule = ruleByPhrase.get(normalizePhrase(match[0]));
     if (!rule) continue;
 
-    const prefix = eligibleText.slice(Math.max(0, match.index - 120), match.index);
+    const start = match.index;
+    const end = start + match[0].length;
+    const prefix = eligibleText.slice(Math.max(0, start - 120), start);
+    if (rule.replacement !== null) {
+      const looksLikeTitle = match[0] !== match[0].toUpperCase() && /\s+\p{Lu}/u.test(match[0]);
+      const couldBeName = (rule.phrase === "commence" || rule.phrase === "utilize") && /^\p{Lu}/u.test(match[0]);
+      if (looksLikeTitle || (couldBeName && (!clauseBeginning.test(prefix) || !capitalizedVerbObject.test(eligibleText.slice(end, end + 100))))) continue;
+    }
     if (rule.phrase === "in order to" && /\b(?:put|place[ds]?|sort(?:ed|s)?|set|arrange[ds]?|keep|kept|line[ds]?|stack(?:ed|s)?)\b[^.!?।॥！？,;:\r\n]*$/iu.test(prefix)) continue;
 
     phraseWeight += rule.weight;
-    matches.push({ rule, prefix, start: match.index, end: match.index + match[0].length });
+    matches.push({ rule, prefix, start, end });
   }
 
   const openings = new Set();
@@ -270,11 +304,10 @@ function contextualMatches(text, matches) {
     const { rule, prefix, start, end } = match;
     if (rule.replacement === null) return [match];
 
-    const original = text.slice(start, end);
-    const looksLikeTitle = original !== original.toUpperCase() && /\s+\p{Lu}/u.test(original);
-    if (looksLikeTitle) return [];
-
     const context = contextualEdits.get(rule.phrase);
+    if (/[\r\n]/u.test(text.slice(start, end))) {
+      return [{ ...match, rule: { ...rule, replacement: null, description: context?.description ?? rule.description } }];
+    }
     if (!context) return [match];
 
     const suffix = text.slice(end, end + 100);
@@ -538,9 +571,10 @@ export function planBulkEdits(text, suggestions, { format = "auto" } = {}) {
 
   const revised = parts.join("") + text.slice(end);
   const prose = proseIn(revised);
-  if (prose.proseWordCount < minimumWords) return unchanged;
+  if (prose.proseWordCount < minimumWords) return { ...unchanged, reason: "too-short" };
   const updated = inspectStyle(revised, prose, format);
-  if (updated.method !== current.method || updated.score >= current.score) return unchanged;
+  if (updated.method !== current.method) return { ...unchanged, reason: "different-method" };
+  if (updated.score >= current.score) return { ...unchanged, reason: "no-score-decrease" };
 
   return { text: revised, count: edits.length };
 }
